@@ -1,0 +1,29 @@
+databases:
+  - name: disputeguard-db
+    databaseName: disputeguard
+    plan: free
+
+services:
+  - type: web
+    name: disputeguard
+    runtime: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: flask --app run db upgrade && gunicorn run:app
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.5
+      - key: DATABASE_URL
+        fromDatabase:
+          name: disputeguard-db
+          property: connectionString
+      - key: SECRET_KEY
+        generateValue: true
+      - key: PAYPAL_BASE_URL
+        value: https://api-m.sandbox.paypal.com
+      - key: PAYPAL_CLIENT_ID
+        sync: false
+      - key: PAYPAL_CLIENT_SECRET
+        sync: false
+      - key: PAYPAL_WEBHOOK_ID
+        sync: false

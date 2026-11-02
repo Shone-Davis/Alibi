@@ -9,10 +9,19 @@ db = SQLAlchemy()
 migrate = Migrate()
 
 
+def _database_url():
+    url = os.environ["DATABASE_URL"]
+    # Render gives postgres:// or postgresql://; SQLAlchemy needs the psycopg driver named
+    for prefix in ("postgres://", "postgresql://"):
+        if url.startswith(prefix):
+            return "postgresql+psycopg://" + url[len(prefix):]
+    return url
+
+
 def create_app():
     load_dotenv()
     app = Flask(__name__)
-    app.config["SQLALCHEMY_DATABASE_URI"] = os.environ["DATABASE_URL"]
+    app.config["SQLALCHEMY_DATABASE_URI"] = _database_url()
     app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY", "dev-only")
 
     db.init_app(app)
