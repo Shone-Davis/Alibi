@@ -72,3 +72,16 @@ def test_t10_missing_deadline_later_keeps_original(app):
     assert row.status == "UNDER_REVIEW"
     assert row.stage == "CHARGEBACK"
     assert row.seller_response_due == DEADLINE
+
+
+def test_t9_dispute_matched_to_order_by_transaction_id(app):
+    from app.models import Order
+
+    db.session.add(Order(paypal_transaction_id="TXN123", amount=25))
+    db.session.commit()
+
+    sync_dispute(FakeClient(paypal_dispute()), "PP-D-100")
+
+    row = Dispute.query.one()
+    assert row.order is not None
+    assert row.order.paypal_transaction_id == "TXN123"

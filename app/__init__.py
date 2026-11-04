@@ -11,7 +11,6 @@ migrate = Migrate()
 
 def _database_url():
     url = os.environ["DATABASE_URL"]
-    # Render gives postgres:// or postgresql://; SQLAlchemy needs the psycopg driver named
     for prefix in ("postgres://", "postgresql://"):
         if url.startswith(prefix):
             return "postgresql+psycopg://" + url[len(prefix):]
@@ -44,5 +43,14 @@ def create_app():
         from app.services.sync import sync_all
         n = sync_all(app.extensions["paypal"])
         print(f"Synced {n} dispute(s)")
+
+    @app.cli.command("seed")
+    def seed_cmd():
+        """Create fake shop orders for disputes that don't have one yet."""
+        from app.demo_seed import seed_orders
+        created = seed_orders()
+        for dispute_id, scenario in created:
+            print(f"  {dispute_id}: {scenario}")
+        print(f"Seeded {len(created)} order(s)")
 
     return app

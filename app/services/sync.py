@@ -1,7 +1,7 @@
 from datetime import datetime
 
 from app import db
-from app.models import Dispute
+from app.models import Dispute, Order
 
 
 def _parse_time(value):
@@ -11,7 +11,6 @@ def _parse_time(value):
 
 
 def _allowed_actions(dispute):
-    # PayPal lists what you can do right now as links; "self" is just the GET
     return [l["rel"] for l in dispute.get("links", []) if l.get("rel") != "self"]
 
 
@@ -38,6 +37,12 @@ def save_dispute(data):
     due = _parse_time(data.get("seller_response_due_date"))
     if due is not None:
         row.seller_response_due = due
+
+    # match the dispute to the shop's order by PayPal transaction ID
+    if row.seller_transaction_id:
+        order = Order.query.filter_by(paypal_transaction_id=row.seller_transaction_id).first()
+        if order:
+            row.order_id = order.id
 
     return row
 
