@@ -67,6 +67,8 @@ def create_app():
             return
         run = run_agent(d)
         print(f"Status: {run.status}")
+        if run.policy:
+            print(f"Action: {run.policy['action']}  allowed: {run.policy['allowed']}")
         if run.error:
             print(f"Error: {run.error}")
         if run.proposal:

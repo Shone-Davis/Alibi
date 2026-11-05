@@ -88,6 +88,7 @@ class AgentRun(db.Model):
     proposal = db.Column(JSONB)        # parsed and checked, or empty
     status = db.Column(db.String(16))  # "ok" or "needs_review"
     error = db.Column(db.Text)
+    policy = db.Column(JSONB)           # safety rule result: allowed, action, reasons
     created_at = db.Column(db.DateTime(timezone=True), default=utcnow)
 
     dispute = db.relationship("Dispute", backref="agent_runs")

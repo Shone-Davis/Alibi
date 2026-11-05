@@ -5,6 +5,7 @@ import os
 
 from app import db
 from app.models import AgentRun
+from app.services.policy import review_proposal
 
 log = logging.getLogger(__name__)
 
@@ -140,7 +141,7 @@ def anthropic_llm(system, user):
 
 
 def run_agent(dispute, llm=None, threshold=None):
-    """Ask the AI for a proposal; retry once on bad output; always save the run."""
+    """Ask the AI for a proposal, retry once on bad output, check it against the rules, save the run."""
     real = llm is None
     llm = llm or anthropic_llm
     if threshold is None:
@@ -156,7 +157,7 @@ def run_agent(dispute, llm=None, threshold=None):
         )
         try:
             raw = llm(SYSTEM_PROMPT, prompt)
-        except Exception as e:  # network, auth, out of credit...
+        except Exception as e:  # network, auth, out of credit, refusal...
             log.exception("AI call failed for %s", dispute.paypal_dispute_id)
             error = f"AI call failed: {e}"
             break
@@ -168,13 +169,22 @@ def run_agent(dispute, llm=None, threshold=None):
         except ValueError as e:
             error = f"Invalid AI output: {e}"
 
+    # Safety rules: plain code has the final say on every proposal
+    policy = None
+    if proposal:
+        result = review_proposal(dispute, proposal)
+        policy = result.as_dict()
+        if not result.allowed:
+            error = "Blocked by safety rules: " + "; ".join(result.reasons)
+
     run = AgentRun(
         dispute_id=dispute.id,
         model=os.environ.get("ANTHROPIC_MODEL", DEFAULT_MODEL) if real else "fake",
         input_context=ctx,
         raw_output="\n--- retry ---\n".join(raw_outputs),
         proposal=proposal,
-        status="ok" if proposal else "needs_review",
+        policy=policy,
+        status="ok" if policy and policy["allowed"] else "needs_review",
         error=error,
     )
     db.session.add(run)
