@@ -115,3 +115,23 @@ def test_t3_4xx_raises_with_debug_id_and_logs(caplog):
     assert exc.value.status == 400
     assert exc.value.debug_id == "dbg123"
     assert "dbg123" in caplog.text
+
+
+@responses.activate
+def test_t4_provide_evidence_is_multipart_with_json_input():
+    add_token()
+    responses.add(
+        responses.POST, f"{BASE}/v1/customer/disputes/PP-D-1/provide-evidence",
+        json={"links": []}, status=200,
+    )
+
+    make_client().provide_evidence(
+        "PP-D-1", [{"evidence_type": "OTHER", "notes": "x"}], request_id="key-1"
+    )
+
+    req = responses.calls[-1].request
+    body = req.body.decode() if isinstance(req.body, bytes) else req.body
+    assert req.headers["Content-Type"].startswith("multipart/form-data")
+    assert req.headers["PayPal-Request-Id"] == "key-1"
+    assert 'name="input"' in body
+    assert '"evidence_type": "OTHER"' in body

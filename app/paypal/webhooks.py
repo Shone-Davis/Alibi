@@ -8,6 +8,7 @@ from sqlalchemy.exc import IntegrityError
 from app import db
 from app.models import WebhookEvent
 from app.paypal.client import PayPalError
+from app.services.audit import record
 from app.services.sync import save_dispute
 
 log = logging.getLogger(__name__)
@@ -61,7 +62,8 @@ def paypal_webhook():
     resource_id = (event.get("resource") or {}).get("dispute_id")
     try:
         if event_type.startswith("CUSTOMER.DISPUTE.") and resource_id:
-            save_dispute(client.get_dispute(resource_id))
+            row = save_dispute(client.get_dispute(resource_id))
+            record(row, "paypal", "webhook_received", {"event_id": event_id, "event_type": event_type})
         db.session.add(
             WebhookEvent(event_id=event_id, event_type=event_type,
                          resource_id=resource_id)

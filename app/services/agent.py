@@ -5,6 +5,7 @@ import os
 
 from app import db
 from app.models import AgentRun
+from app.services.audit import record
 from app.services.policy import review_proposal
 
 log = logging.getLogger(__name__)
@@ -188,5 +189,8 @@ def run_agent(dispute, llm=None, threshold=None):
         error=error,
     )
     db.session.add(run)
+    db.session.flush()
+    record(dispute, "ai", "proposal_created",
+           {"agent_run_id": run.id, "status": run.status, "policy": policy})
     db.session.commit()
     return run

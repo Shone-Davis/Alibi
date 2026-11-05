@@ -101,3 +101,35 @@ class AgentRun(db.Model):
     created_at = db.Column(db.DateTime(timezone=True), default=utcnow)
 
     dispute = db.relationship("Dispute", backref="agent_runs")
+
+
+class Action(db.Model):
+    __tablename__ = "actions"
+
+    id = db.Column(db.Integer, primary_key=True)
+    dispute_id = db.Column(db.Integer, db.ForeignKey("disputes.id"), nullable=False, index=True)
+    agent_run_id = db.Column(db.Integer, db.ForeignKey("agent_runs.id"))
+    action_type = db.Column(db.String(32))
+    amount = db.Column(db.Numeric(12, 2))
+    idempotency_key = db.Column(db.String(64), unique=True, nullable=False)
+    status = db.Column(db.String(16))  # pending, sent, failed
+    approved_by = db.Column(db.String(64))
+    paypal_response = db.Column(JSONB)
+    error = db.Column(db.Text)
+    created_at = db.Column(db.DateTime(timezone=True), default=utcnow)
+    completed_at = db.Column(db.DateTime(timezone=True))
+
+    dispute = db.relationship("Dispute", backref="actions")
+
+
+class AuditLog(db.Model):
+    __tablename__ = "audit_log"
+
+    id = db.Column(db.Integer, primary_key=True)
+    dispute_id = db.Column(db.Integer, db.ForeignKey("disputes.id"), index=True)
+    actor = db.Column(db.String(16))  # system, ai, seller, paypal
+    event = db.Column(db.String(48))
+    detail = db.Column(JSONB)
+    created_at = db.Column(db.DateTime(timezone=True), default=utcnow)
+
+    dispute = db.relationship("Dispute", backref="audit_entries")

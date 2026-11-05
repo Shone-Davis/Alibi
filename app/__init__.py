@@ -74,4 +74,25 @@ def create_app():
         if run.proposal:
             print(json.dumps(run.proposal, indent=2))
 
+    @app.cli.command("approve")
+    @click.argument("dispute_id")
+    def approve_cmd(dispute_id):
+        """Approve the latest proposal that passed the safety rules and send it to PayPal."""
+        from app.models import AgentRun, Dispute
+        from app.services.actions import ActionBlocked, approve
+        d = Dispute.query.filter_by(paypal_dispute_id=dispute_id).first()
+        run = d and AgentRun.query.filter_by(dispute_id=d.id, status="ok").order_by(AgentRun.id.desc()).first()
+        if not run:
+            print(f"No proposal has passed the safety rules. Run: flask --app run analyze {dispute_id}")
+            return
+        try:
+            action = approve(run, approved_by="seller:cli", client=app.extensions["paypal"])
+        except ActionBlocked as e:
+            print("Blocked: " + "; ".join(e.reasons))
+            return
+        print(f"{action.action_type}: {action.status}")
+        if action.error:
+            print(action.error)
+        print(f"Dispute status: {d.status}")
+
     return app

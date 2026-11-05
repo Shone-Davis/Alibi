@@ -1,3 +1,4 @@
+import json
 import logging
 import os
 import time
@@ -97,3 +98,45 @@ class PayPalClient:
             data=body,
         )
         return result.get("verification_status") == "SUCCESS"
+
+    @staticmethod
+    def _request_id(request_id):
+        return {"PayPal-Request-Id": request_id} if request_id else {}
+
+    def provide_evidence(self, dispute_id, evidences, request_id=None):
+        body = json.dumps({"evidences": evidences})
+        return self._request(
+            "POST",
+            f"/v1/customer/disputes/{dispute_id}/provide-evidence",
+            headers=self._request_id(request_id),
+            files={"input": (None, body, "application/json")},
+        )
+
+    def provide_supporting_info(self, dispute_id, notes, request_id=None):
+        body = json.dumps({"notes": notes})
+        return self._request(
+            "POST",
+            f"/v1/customer/disputes/{dispute_id}/provide-supporting-info",
+            headers=self._request_id(request_id),
+            files={"input": (None, body, "application/json")},
+        )
+
+    def make_offer(self, dispute_id, note, amount, currency, request_id=None):
+        return self._request(
+            "POST",
+            f"/v1/customer/disputes/{dispute_id}/make-offer",
+            headers=self._request_id(request_id),
+            json={
+                "note": note,
+                "offer_type": "REFUND",
+                "offer_amount": {"currency_code": currency, "value": f"{float(amount):.2f}"},
+            },
+        )
+
+    def accept_claim(self, dispute_id, note, request_id=None):
+        return self._request(
+            "POST",
+            f"/v1/customer/disputes/{dispute_id}/accept-claim",
+            headers=self._request_id(request_id),
+            json={"note": note},
+        )
