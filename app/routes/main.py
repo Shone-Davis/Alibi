@@ -4,6 +4,7 @@ from app.labels import label
 from app.models import Action, AgentRun, AuditLog, Dispute
 from app.services.actions import ActionBlocked, approve
 from app.services.agent import run_agent
+from app.services.dashboard import dashboard_rows
 from app.services.policy import SELLER_ACTIONS, is_urgent
 
 bp = Blueprint("main", __name__)
@@ -31,8 +32,8 @@ def _dispute_or_404(pid):
 
 @bp.route("/")
 def index():
-    disputes = Dispute.query.order_by(Dispute.seller_response_due.asc().nulls_last()).all()
-    return render_template("index.html", disputes=disputes, is_urgent=is_urgent)
+    rows, summary = dashboard_rows()
+    return render_template("index.html", rows=rows, summary=summary)
 
 
 @bp.route("/disputes/<pid>")

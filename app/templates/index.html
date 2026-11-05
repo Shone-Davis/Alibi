@@ -1,26 +1,138 @@
 {% extends "base.html" %}
+
+{% block head %}
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ag-grid-community@32.3.3/styles/ag-grid.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ag-grid-community@32.3.3/styles/ag-theme-quartz.css">
+<script src="https://cdn.jsdelivr.net/npm/ag-grid-community@32.3.3/dist/ag-grid-community.min.js"></script>
+<style>
+  .ag-theme-quartz {
+    --ag-font-family: inherit;
+    --ag-font-size: 13px;
+    --ag-header-background-color: #f1f5f9;
+    --ag-row-hover-color: #f8fafc;
+  }
+  .ag-theme-quartz .row-urgent { background-color: #fef2f2; }
+  .ag-theme-quartz .ag-row { cursor: pointer; }
+</style>
+{% endblock %}
+
 {% block content %}
-<h1 class="text-2xl font-semibold">Disputes</h1>
-<table class="mt-4 w-full bg-white rounded-lg border border-slate-200 text-sm">
-  <thead class="bg-slate-100 text-left text-slate-600">
-    <tr>
-      <th class="p-3">Dispute</th><th class="p-3">Reason</th><th class="p-3">Status</th>
-      <th class="p-3">Amount</th><th class="p-3">Respond by</th>
-    </tr>
-  </thead>
-  <tbody>
-    {% for d in disputes %}
-    <tr class="border-t border-slate-100 {{ 'bg-red-50' if is_urgent(d) }}">
-      <td class="p-3 font-mono"><a class="text-blue-700 hover:underline"
-          href="{{ url_for('main.dispute_detail', pid=d.paypal_dispute_id) }}">{{ d.paypal_dispute_id }}</a></td>
-      <td class="p-3">{{ d.reason | label }}</td>
-      <td class="p-3">{{ d.status | label }}</td>
-      <td class="p-3">{{ d.amount }} {{ d.currency }}</td>
-      <td class="p-3">{{ d.seller_response_due | when }}</td>
-    </tr>
-    {% else %}
-    <tr><td class="p-3 text-slate-500" colspan="5">No disputes yet. New ones arrive automatically from PayPal.</td></tr>
-    {% endfor %}
-  </tbody>
-</table>
+{% macro tile(title, value, tone="text-slate-900") %}
+<div class="rounded-lg border border-slate-200 bg-white p-4">
+  <div class="text-xs font-medium uppercase tracking-wide text-slate-500">{{ title }}</div>
+  <div class="mt-1 text-2xl font-semibold {{ tone }}">{{ value }}</div>
+</div>
+{% endmacro %}
+
+<div class="flex flex-wrap items-end justify-between gap-3">
+  <div>
+    <h1 class="text-2xl font-semibold">Disputes</h1>
+    <p class="mt-1 text-sm text-slate-500">Sorted by deadline. New disputes arrive automatically from PayPal.</p>
+  </div>
+  <input id="quick-filter" type="search" placeholder="Search disputes"
+         class="w-full sm:w-64 rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm">
+</div>
+
+<div class="mt-5 grid grid-cols-2 gap-3 md:grid-cols-4">
+  {{ tile("Open", summary.open) }}
+  {{ tile("Waiting on you", summary.waiting_on_you, "text-amber-700" if summary.waiting_on_you else "text-slate-900") }}
+  {{ tile("Urgent", summary.urgent, "text-red-700" if summary.urgent else "text-slate-900") }}
+  {{ tile("At stake", summary.at_stake ~ " USD") }}
+</div>
+
+<div id="grid" class="ag-theme-quartz mt-5"></div>
+<script id="rows" type="application/json">{{ rows | tojson }}</script>
+
+<script>
+  const rows = JSON.parse(document.getElementById("rows").textContent);
+
+  const STATUS_TONES = {
+    WAITING_FOR_SELLER_RESPONSE: "bg-amber-100 text-amber-800",
+    OPEN: "bg-amber-100 text-amber-800",
+    WAITING_FOR_BUYER_RESPONSE: "bg-slate-100 text-slate-700",
+    UNDER_REVIEW: "bg-blue-100 text-blue-800",
+    RESOLVED: "bg-emerald-100 text-emerald-800",
+  };
+  const RECOMMENDATION_TONES = {
+    "Fight": "bg-blue-100 text-blue-800",
+    "Partial refund": "bg-amber-100 text-amber-800",
+    "Full refund": "bg-amber-100 text-amber-800",
+    "Needs review": "bg-red-100 text-red-800",
+    "Sent to PayPal": "bg-emerald-100 text-emerald-800",
+  };
+
+  function el(tag, className, text) {
+    const node = document.createElement(tag);
+    node.className = className;
+    node.textContent = text;
+    return node;
+  }
+
+  function badge(text, tone) {
+    return text ? el("span", `inline-block rounded px-1.5 py-0.5 text-xs font-medium ${tone}`, text) : "";
+  }
+
+  function dueComparator(a, b, nodeA, nodeB, isDescending) {
+    if (a === b) return 0;
+    if (a === null) return isDescending ? -1 : 1;
+    if (b === null) return isDescending ? 1 : -1;
+    return Date.parse(a) - Date.parse(b);
+  }
+
+  function dueRenderer(p) {
+    if (!p.value) return el("span", "text-slate-400", "No deadline");
+    const text = new Date(p.value).toLocaleString(undefined, {
+      month: "short", day: "numeric", hour: "numeric", minute: "2-digit",
+    });
+    const wrap = el("span", p.data.urgent ? "font-semibold text-red-700" : "", text);
+    if (p.data.urgent) wrap.append(" ", badge("Urgent", "bg-red-100 text-red-800"));
+    return wrap;
+  }
+
+  const columnDefs = [
+    {
+      field: "id", headerName: "Dispute", minWidth: 190,
+      cellRenderer: (p) => {
+        const link = el("a", "font-mono text-blue-700 hover:underline", p.value);
+        link.href = `/disputes/${encodeURIComponent(p.value)}`;
+        return link;
+      },
+    },
+    { field: "reason", headerName: "Reason", minWidth: 150 },
+    {
+      field: "amount", headerName: "Amount", type: "rightAligned", maxWidth: 130,
+      valueFormatter: (p) => (p.value == null ? "" : `${p.value.toFixed(2)} ${p.data.currency}`),
+    },
+    {
+      field: "status", headerName: "Status", minWidth: 170,
+      cellRenderer: (p) => badge(p.value, STATUS_TONES[p.data.status_code] || "bg-slate-100 text-slate-700"),
+    },
+    { field: "stage", headerName: "Stage", maxWidth: 130 },
+    {
+      field: "recommendation", headerName: "Recommendation", minWidth: 160,
+      cellRenderer: (p) => badge(p.value, RECOMMENDATION_TONES[p.value] || "bg-slate-100 text-slate-700"),
+    },
+    {
+      field: "due", headerName: "Respond by", minWidth: 190, sort: "asc",
+      comparator: dueComparator, cellRenderer: dueRenderer, filter: false,
+    },
+  ];
+
+  const grid = agGrid.createGrid(document.getElementById("grid"), {
+    rowData: rows,
+    columnDefs,
+    defaultColDef: { sortable: true, resizable: true, filter: true, flex: 1, minWidth: 110 },
+    domLayout: "autoHeight",
+    rowClassRules: { "row-urgent": (p) => p.data.urgent },
+    overlayNoRowsTemplate: "No disputes yet. New ones arrive automatically from PayPal.",
+    onRowClicked: (e) => {
+      if (e.event.target.closest("a")) return;
+      window.location.href = `/disputes/${encodeURIComponent(e.data.id)}`;
+    },
+  });
+
+  document.getElementById("quick-filter").addEventListener("input", (e) => {
+    grid.setGridOption("quickFilterText", e.target.value);
+  });
+</script>
 {% endblock %}

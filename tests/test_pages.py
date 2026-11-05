@@ -84,3 +84,38 @@ def test_approve_twice_from_page_sends_once(app):
 
 def test_unknown_dispute_is_404(app):
     assert app.test_client().get("/disputes/PP-NOPE").status_code == 404
+
+
+def test_t24_dashboard_sorted_by_deadline_with_urgent_flagged(app):
+    from datetime import datetime, timedelta, timezone
+
+    from app.services.dashboard import dashboard_rows
+
+    now = datetime(2026, 11, 5, 12, tzinfo=timezone.utc)
+    for pid, hours, status in [
+        ("PP-LATER", 72, "WAITING_FOR_SELLER_RESPONSE"),
+        ("PP-NONE", None, "WAITING_FOR_SELLER_RESPONSE"),
+        ("PP-SOON", 10, "WAITING_FOR_SELLER_RESPONSE"),
+        ("PP-BUYER", 5, "WAITING_FOR_BUYER_RESPONSE"),
+    ]:
+        due = now + timedelta(hours=hours) if hours is not None else None
+        db.session.add(Dispute(paypal_dispute_id=pid, status=status, amount=10, seller_response_due=due))
+    db.session.commit()
+
+    rows, summary = dashboard_rows(now=now)
+
+    assert [r["id"] for r in rows] == ["PP-BUYER", "PP-SOON", "PP-LATER", "PP-NONE"]
+    assert {r["id"]: r["urgent"] for r in rows} == {
+        "PP-BUYER": False, "PP-SOON": True, "PP-LATER": False, "PP-NONE": False,
+    }
+    assert summary["urgent"] == 1
+    assert summary["waiting_on_you"] == 3
+
+
+def test_t24_dashboard_page_renders_grid(app):
+    make_case()
+    page = app.test_client().get("/")
+
+    assert page.status_code == 200
+    assert b'id="grid"' in page.data
+    assert b"PP-D-1" in page.data

@@ -173,3 +173,10 @@ def test_t16_correct_written_date_allowed(app):
         ship, draft_note=f"Tracking {TRACKING} shows delivery on Oct 30 2026."))
 
     assert r.allowed, r.reasons
+
+
+def test_t20_not_urgent_once_waiting_on_buyer(app):
+    d, _ = make_case(due=NOW + timedelta(hours=5))
+    d.status = "WAITING_FOR_BUYER_RESPONSE"
+
+    assert not is_urgent(d, now=NOW)

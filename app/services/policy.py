@@ -11,6 +11,7 @@ from app.labels import label
 SELLER_ACTIONS = {"provide_evidence", "provide_supporting_info", "make_offer", "accept_claim"}
 MONEY_ACTIONS = {"make_offer", "accept_claim"}
 URGENT_HOURS = 48
+NOT_WAITING_ON_SELLER = {"WAITING_FOR_BUYER_RESPONSE", "UNDER_REVIEW", "RESOLVED"}
 
 # 10+ capitals/digits with at least 8 digits: looks like a tracking or transaction number
 NUMBER_RE = re.compile(r"\b(?=(?:[A-Z]*\d){8})[A-Z0-9]{10,}\b")
@@ -131,7 +132,9 @@ def check_execution(dispute, proposal, approved_by):
 
 
 def is_urgent(dispute, now=None, hours=URGENT_HOURS):
-    """Rule 6: under 48 hours to the deadline (or already past it) is urgent."""
+    """Under 48 hours to the deadline, or past it, while the seller still has to respond."""
+    if dispute.status in NOT_WAITING_ON_SELLER:
+        return False
     due = dispute.seller_response_due
     if due is None:
         return False
