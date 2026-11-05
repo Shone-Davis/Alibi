@@ -18,7 +18,8 @@ def make_case(allowed=("provide_evidence",), stage="INQUIRY", amount=25, due=Non
     ship = Shipment(order_id=order.id, carrier="USPS", tracking_number=TRACKING,
                     shipped_at=SHIPPED, delivered_at=DELIVERED)
     db.session.add(ship)
-    db.session.add(Message(order_id=order.id, sender="buyer", body="hi", sent_at=SHIPPED))
+    db.session.add(Message(order_id=order.id, sender="buyer",
+                   body="hi", sent_at=SHIPPED))
     d = Dispute(paypal_dispute_id="PP-D-1", stage=stage, amount=amount, currency="USD",
                 allowed_actions=list(allowed), order_id=order.id, seller_response_due=due)
     db.session.add(d)
@@ -53,11 +54,12 @@ def test_clean_fight_passes(app):
     assert r.action == "provide_evidence"
 
 
-# T16: no made-up evidence ------------------------------------------------
+# T16: no made-up evidence
 
 def test_t16_unknown_record_id_blocked(app):
     d, ship = make_case()
-    r = review_proposal(d, fight(ship, evidence=[{"record_id": "shipment:999", "claim": "Delivered"}]))
+    r = review_proposal(
+        d, fight(ship, evidence=[{"record_id": "shipment:999", "claim": "Delivered"}]))
 
     assert not r.allowed
     assert any("shipment:999" in x for x in r.reasons)
@@ -65,7 +67,8 @@ def test_t16_unknown_record_id_blocked(app):
 
 def test_t16_made_up_tracking_number_in_text_blocked(app):
     d, ship = make_case()
-    r = review_proposal(d, fight(ship, draft_note="Delivered under tracking 9400999999999999999999."))
+    r = review_proposal(
+        d, fight(ship, draft_note="Delivered under tracking 9400999999999999999999."))
 
     assert not r.allowed
     assert any("9400999999999999999999" in x for x in r.reasons)
@@ -73,13 +76,14 @@ def test_t16_made_up_tracking_number_in_text_blocked(app):
 
 def test_t16_made_up_date_blocked(app):
     d, ship = make_case()
-    r = review_proposal(d, fight(ship, draft_note=f"Tracking {TRACKING} shows delivery on 2026-10-29."))
+    r = review_proposal(d, fight(
+        ship, draft_note=f"Tracking {TRACKING} shows delivery on 2026-10-29."))
 
     assert not r.allowed
     assert any("2026-10-29" in x for x in r.reasons)
 
 
-# T17: only allowed actions, right one for the stage ----------------------
+# T17: only allowed actions, right one for the stage
 
 def test_t17_action_not_allowed_by_paypal_blocked(app):
     d, ship = make_case(allowed=("accept_claim",))
@@ -90,14 +94,15 @@ def test_t17_action_not_allowed_by_paypal_blocked(app):
 
 
 def test_t17_chargeback_stage_uses_supporting_info(app):
-    d, ship = make_case(allowed=("provide_supporting_info",), stage="CHARGEBACK")
+    d, ship = make_case(
+        allowed=("provide_supporting_info",), stage="CHARGEBACK")
     r = review_proposal(d, fight(ship))
 
     assert r.allowed, r.reasons
     assert r.action == "provide_supporting_info"
 
 
-# T18: offers can't exceed the disputed amount ----------------------------
+# T18: offers can't exceed the disputed amount
 
 def test_t18_offer_above_disputed_amount_blocked(app):
     d, _ = make_case(allowed=("make_offer",))
@@ -121,7 +126,7 @@ def test_t15_injected_500_refund_still_blocked_by_rules(app):
     assert not r.allowed
 
 
-# T19: nothing goes to PayPal without the seller --------------------------
+# T19: nothing goes to PayPal without the seller
 
 def test_t19_money_action_without_approval_blocked(app):
     d, _ = make_case(allowed=("accept_claim",))
@@ -138,7 +143,7 @@ def test_t19_money_action_with_approval_allowed(app):
     assert r.allowed, r.reasons
 
 
-# T20: deadline under 48 hours is urgent ----------------------------------
+# T20: deadline under 48 hours is urgent
 
 def test_t20_under_48_hours_is_urgent(app):
     d, _ = make_case(due=NOW + timedelta(hours=47))
@@ -155,7 +160,8 @@ def test_t20_over_48_hours_or_no_deadline_not_urgent(app):
 
 def test_t16_made_up_written_date_blocked(app):
     d, ship = make_case()
-    r = review_proposal(d, fight(ship, draft_note=f"Tracking {TRACKING} shows delivery on October 29, 2026."))
+    r = review_proposal(d, fight(
+        ship, draft_note=f"Tracking {TRACKING} shows delivery on October 29, 2026."))
 
     assert not r.allowed
     assert any("October 29, 2026" in x for x in r.reasons)
@@ -163,6 +169,7 @@ def test_t16_made_up_written_date_blocked(app):
 
 def test_t16_correct_written_date_allowed(app):
     d, ship = make_case()
-    r = review_proposal(d, fight(ship, draft_note=f"Tracking {TRACKING} shows delivery on Oct 30 2026."))
+    r = review_proposal(d, fight(
+        ship, draft_note=f"Tracking {TRACKING} shows delivery on Oct 30 2026."))
 
     assert r.allowed, r.reasons

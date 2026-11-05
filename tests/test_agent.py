@@ -33,13 +33,15 @@ class FakeLLM:
 
 
 def make_dispute(buyer_message="Thanks!"):
-    order = Order(paypal_transaction_id="TXN1", item_description="Mug", amount=25, currency="USD")
+    order = Order(paypal_transaction_id="TXN1",
+                  item_description="Mug", amount=25, currency="USD")
     db.session.add(order)
     db.session.flush()
     ship = Shipment(order_id=order.id, carrier="USPS", tracking_number="9400111222333444555666",
                     shipped_at=NOW, delivered_at=NOW)
     db.session.add(ship)
-    db.session.add(Message(order_id=order.id, sender="buyer", body=buyer_message, sent_at=NOW))
+    db.session.add(Message(order_id=order.id, sender="buyer",
+                   body=buyer_message, sent_at=NOW))
     d = Dispute(paypal_dispute_id="PP-D-1", reason="MERCHANDISE_OR_SERVICE_NOT_RECEIVED",
                 stage="INQUIRY", amount=25, currency="USD", allowed_actions=["provide_evidence"],
                 seller_transaction_id="TXN1", order_id=order.id)
@@ -59,7 +61,8 @@ def test_valid_output_passes_rules_and_is_saved(app):
 
     assert run.status == "ok", run.error
     assert run.proposal["recommendation"] == "fight"
-    assert run.policy == {"allowed": True, "action": "provide_evidence", "reasons": []}
+    assert run.policy == {"allowed": True,
+                          "action": "provide_evidence", "reasons": []}
     assert AgentRun.query.count() == 1
 
 
@@ -75,7 +78,8 @@ def test_records_reach_ai_with_ids(app):
 
 def test_valid_json_with_made_up_tracking_is_blocked(app):
     d, ship = make_dispute()
-    fake = good(ship.id, draft_note="Delivered under tracking 9400999999999999999999.")
+    fake = good(
+        ship.id, draft_note="Delivered under tracking 9400999999999999999999.")
     run = run_agent(d, llm=FakeLLM(fake))
 
     assert run.status == "needs_review"
@@ -83,7 +87,7 @@ def test_valid_json_with_made_up_tracking_is_blocked(app):
     assert run.proposal is not None  # kept so the seller can see what was blocked
 
 
-# T14: broken JSON -> retry once, then needs review -----------------------
+# T14: broken JSON - retry once, then needs review
 
 def test_t14_broken_then_good_succeeds_on_retry(app):
     d, ship = make_dispute()
@@ -113,7 +117,7 @@ def test_t14_wrong_shape_marks_needs_review(app):
     assert run.status == "needs_review"
 
 
-# T15: buyer text is data, not instructions -------------------------------
+# T15: buyer text is data, not instructions
 
 def test_t15_buyer_message_reaches_ai_only_as_quoted_data(app):
     d, ship = make_dispute(buyer_message=INJECTION)

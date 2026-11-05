@@ -43,7 +43,8 @@ def fake(app, monkeypatch):
 
 def event(event_id="WH-1", event_type="CUSTOMER.DISPUTE.CREATED", dispute_id="PP-D-1"):
     return json.dumps(
-        {"id": event_id, "event_type": event_type, "resource": {"dispute_id": dispute_id}}
+        {"id": event_id, "event_type": event_type,
+            "resource": {"dispute_id": dispute_id}}
     )
 
 
@@ -53,7 +54,7 @@ def post(app, body, headers=SIG_HEADERS):
     )
 
 
-# T5: valid signature -> 200, dispute synced ------------------------------
+# T5: valid signature - 200, dispute synced
 
 def test_t5_valid_event_syncs_dispute(app, fake):
     r = post(app, event())
@@ -65,7 +66,7 @@ def test_t5_valid_event_syncs_dispute(app, fake):
     assert WebhookEvent.query.count() == 1
 
 
-# T6: missing or fake signature -> 400, nothing saved ---------------------
+# T6: missing or fake signature -> 400, nothing saved
 
 def test_t6_missing_signature_headers_rejected(app, fake):
     r = post(app, event(), headers={})
@@ -86,7 +87,7 @@ def test_t6_fake_signature_rejected(app, fake):
     assert WebhookEvent.query.count() == 0
 
 
-# T7: same event twice -> processed once ----------------------------------
+# T7: same event twice - processed once
 
 def test_t7_duplicate_event_processed_once(app, fake):
     first = post(app, event(event_id="WH-DUP"))
@@ -98,7 +99,7 @@ def test_t7_duplicate_event_processed_once(app, fake):
     assert WebhookEvent.query.count() == 1
 
 
-# T8: unknown event type -> ignored with 200; GET -> 405 ------------------
+# T8: unknown event type ignored with 200; GET - 405
 
 def test_t8_unknown_event_type_ignored(app, fake):
     r = post(app, event(event_type="PAYMENT.CAPTURE.COMPLETED"))

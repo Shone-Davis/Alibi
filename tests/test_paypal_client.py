@@ -92,7 +92,7 @@ def test_t2_401_twice_gives_up_instead_of_looping():
         make_client().list_disputes()
 
     assert exc.value.status == 401
-    assert count_calls(DISPUTES_URL) == 2  # original + exactly one retry
+    assert count_calls(DISPUTES_URL) == 2
 
 
 # T3: 4xx error carries debug_id and is logged

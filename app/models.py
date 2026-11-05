@@ -13,7 +13,8 @@ class Order(db.Model):
     __tablename__ = "orders"
 
     id = db.Column(db.Integer, primary_key=True)
-    paypal_transaction_id = db.Column(db.String(64), unique=True, nullable=False, index=True)
+    paypal_transaction_id = db.Column(
+        db.String(64), unique=True, nullable=False, index=True)
     customer_name = db.Column(db.String(120))
     customer_email = db.Column(db.String(255))
     item_description = db.Column(db.String(255))
@@ -21,26 +22,31 @@ class Order(db.Model):
     currency = db.Column(db.String(3))
     ordered_at = db.Column(db.DateTime(timezone=True))
 
-    shipments = db.relationship("Shipment", backref="order", order_by="Shipment.id")
-    messages = db.relationship("Message", backref="order", order_by="Message.sent_at")
+    shipments = db.relationship(
+        "Shipment", backref="order", order_by="Shipment.id")
+    messages = db.relationship(
+        "Message", backref="order", order_by="Message.sent_at")
 
 
 class Shipment(db.Model):
     __tablename__ = "shipments"
 
     id = db.Column(db.Integer, primary_key=True)
-    order_id = db.Column(db.Integer, db.ForeignKey("orders.id"), nullable=False, index=True)
+    order_id = db.Column(db.Integer, db.ForeignKey(
+        "orders.id"), nullable=False, index=True)
     carrier = db.Column(db.String(32))
     tracking_number = db.Column(db.String(64), index=True)
     shipped_at = db.Column(db.DateTime(timezone=True))
-    delivered_at = db.Column(db.DateTime(timezone=True))  # empty = not delivered yet
+    # empty = not delivered yet
+    delivered_at = db.Column(db.DateTime(timezone=True))
 
 
 class Message(db.Model):
     __tablename__ = "messages"
 
     id = db.Column(db.Integer, primary_key=True)
-    order_id = db.Column(db.Integer, db.ForeignKey("orders.id"), nullable=False, index=True)
+    order_id = db.Column(db.Integer, db.ForeignKey(
+        "orders.id"), nullable=False, index=True)
     sender = db.Column(db.String(16))  # "seller" or "buyer"
     body = db.Column(db.Text)
     sent_at = db.Column(db.DateTime(timezone=True))
@@ -50,7 +56,8 @@ class Dispute(db.Model):
     __tablename__ = "disputes"
 
     id = db.Column(db.Integer, primary_key=True)
-    paypal_dispute_id = db.Column(db.String(64), unique=True, nullable=False, index=True)
+    paypal_dispute_id = db.Column(
+        db.String(64), unique=True, nullable=False, index=True)
     reason = db.Column(db.String(64))
     status = db.Column(db.String(64))
     stage = db.Column(db.String(32))  # INQUIRY, CHARGEBACK, ...
@@ -62,7 +69,8 @@ class Dispute(db.Model):
     raw = db.Column(JSONB)
     order_id = db.Column(db.Integer, db.ForeignKey("orders.id"), index=True)
     first_seen_at = db.Column(db.DateTime(timezone=True), default=utcnow)
-    updated_at = db.Column(db.DateTime(timezone=True), default=utcnow, onupdate=utcnow)
+    updated_at = db.Column(db.DateTime(timezone=True),
+                           default=utcnow, onupdate=utcnow)
 
     order = db.relationship("Order")
 
@@ -81,14 +89,15 @@ class AgentRun(db.Model):
     __tablename__ = "agent_runs"
 
     id = db.Column(db.Integer, primary_key=True)
-    dispute_id = db.Column(db.Integer, db.ForeignKey("disputes.id"), nullable=False, index=True)
+    dispute_id = db.Column(db.Integer, db.ForeignKey(
+        "disputes.id"), nullable=False, index=True)
     model = db.Column(db.String(64))
-    input_context = db.Column(JSONB)   # exactly what the AI was shown
-    raw_output = db.Column(db.Text)    # exactly what it replied
-    proposal = db.Column(JSONB)        # parsed and checked, or empty
-    status = db.Column(db.String(16))  # "ok" or "needs_review"
+    input_context = db.Column(JSONB)
+    raw_output = db.Column(db.Text)
+    proposal = db.Column(JSONB)
+    status = db.Column(db.String(16))
     error = db.Column(db.Text)
-    policy = db.Column(JSONB)           # safety rule result: allowed, action, reasons
+    policy = db.Column(JSONB)
     created_at = db.Column(db.DateTime(timezone=True), default=utcnow)
 
     dispute = db.relationship("Dispute", backref="agent_runs")
