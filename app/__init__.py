@@ -1,5 +1,7 @@
+import json
 import os
 
+import click
 from dotenv import load_dotenv
 from flask import Flask
 from flask_migrate import Migrate
@@ -52,5 +54,22 @@ def create_app():
         for dispute_id, scenario in created:
             print(f"  {dispute_id}: {scenario}")
         print(f"Seeded {len(created)} order(s)")
+
+    @app.cli.command("analyze")
+    @click.argument("dispute_id")
+    def analyze_cmd(dispute_id):
+        """Run the AI on one dispute and print its proposal."""
+        from app.models import Dispute
+        from app.services.agent import run_agent
+        d = Dispute.query.filter_by(paypal_dispute_id=dispute_id).first()
+        if d is None:
+            print("Not in the database. Run: flask --app run sync")
+            return
+        run = run_agent(d)
+        print(f"Status: {run.status}")
+        if run.error:
+            print(f"Error: {run.error}")
+        if run.proposal:
+            print(json.dumps(run.proposal, indent=2))
 
     return app

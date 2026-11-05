@@ -75,3 +75,19 @@ class WebhookEvent(db.Model):
     event_type = db.Column(db.String(64))
     resource_id = db.Column(db.String(64))
     received_at = db.Column(db.DateTime(timezone=True), default=utcnow)
+
+
+class AgentRun(db.Model):
+    __tablename__ = "agent_runs"
+
+    id = db.Column(db.Integer, primary_key=True)
+    dispute_id = db.Column(db.Integer, db.ForeignKey("disputes.id"), nullable=False, index=True)
+    model = db.Column(db.String(64))
+    input_context = db.Column(JSONB)   # exactly what the AI was shown
+    raw_output = db.Column(db.Text)    # exactly what it replied
+    proposal = db.Column(JSONB)        # parsed and checked, or empty
+    status = db.Column(db.String(16))  # "ok" or "needs_review"
+    error = db.Column(db.Text)
+    created_at = db.Column(db.DateTime(timezone=True), default=utcnow)
+
+    dispute = db.relationship("Dispute", backref="agent_runs")
