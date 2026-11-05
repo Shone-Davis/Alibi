@@ -11,9 +11,28 @@ os.environ["PAYPAL_BASE_URL"] = "https://api.test.paypal"
 @pytest.fixture
 def app():
     app = create_app()
+    app.config["WTF_CSRF_ENABLED"] = False
     with app.app_context():
         db.drop_all()
         db.create_all()
         yield app
         db.session.remove()
         db.drop_all()
+
+
+@pytest.fixture
+def seller(app):
+    from app.models import User
+
+    user = User(email="seller@example.com")
+    user.set_password("correct-horse")
+    db.session.add(user)
+    db.session.commit()
+    return user
+
+
+@pytest.fixture
+def client(app, seller):
+    c = app.test_client()
+    c.post("/login", data={"email": "seller@example.com", "password": "correct-horse"})
+    return c

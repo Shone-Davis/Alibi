@@ -53,26 +53,25 @@ def make_case(allowed=("provide_evidence",)):
     return d, run
 
 
-def test_t25_approve_button_shown_for_allowed_action(app):
+def test_t25_approve_button_shown_for_allowed_action(app, client):
     make_case()
-    page = app.test_client().get("/disputes/PP-D-1")
+    page = client.get("/disputes/PP-D-1")
 
     assert page.status_code == 200
     assert b'id="approve-button"' in page.data
 
 
-def test_t25_approve_button_hidden_when_paypal_no_longer_allows_it(app):
+def test_t25_approve_button_hidden_when_paypal_no_longer_allows_it(app, client):
     make_case(allowed=("accept_claim",))
-    page = app.test_client().get("/disputes/PP-D-1")
+    page = client.get("/disputes/PP-D-1")
 
     assert b'id="approve-button"' not in page.data
 
 
-def test_approve_twice_from_page_sends_once(app):
+def test_approve_twice_from_page_sends_once(app, client):
     _, run = make_case()
     fake = FakePayPal(["provide_evidence"])
     app.extensions["paypal"] = fake
-    client = app.test_client()
 
     client.post("/disputes/PP-D-1/approve", data={"run_id": run.id})
     client.post("/disputes/PP-D-1/approve", data={"run_id": run.id})
@@ -82,11 +81,11 @@ def test_approve_twice_from_page_sends_once(app):
     assert b'id="approve-button"' not in client.get("/disputes/PP-D-1").data
 
 
-def test_unknown_dispute_is_404(app):
-    assert app.test_client().get("/disputes/PP-NOPE").status_code == 404
+def test_unknown_dispute_is_404(app, client):
+    assert client.get("/disputes/PP-NOPE").status_code == 404
 
 
-def test_t24_dashboard_sorted_by_deadline_with_urgent_flagged(app):
+def test_t24_dashboard_sorted_by_deadline_with_urgent_flagged(app, client):
     from datetime import datetime, timedelta, timezone
 
     from app.services.dashboard import dashboard_rows
@@ -112,9 +111,9 @@ def test_t24_dashboard_sorted_by_deadline_with_urgent_flagged(app):
     assert summary["waiting_on_you"] == 3
 
 
-def test_t24_dashboard_page_renders_grid(app):
+def test_t24_dashboard_page_renders_grid(app, client):
     make_case()
-    page = app.test_client().get("/")
+    page = client.get("/")
 
     assert page.status_code == 200
     assert b'id="grid"' in page.data

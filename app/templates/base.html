@@ -11,7 +11,16 @@
   <header class="bg-white border-b border-slate-200">
     <div class="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between">
       <a href="{{ url_for('main.index') }}" class="font-semibold tracking-tight">DisputeGuard</a>
-      <span class="text-xs text-slate-500">PayPal sandbox</span>
+      <div class="flex items-center gap-4 text-xs text-slate-500">
+        <span>PayPal sandbox</span>
+        {% if current_user.is_authenticated %}
+          <span>{{ current_user.email }}</span>
+          <form method="post" action="{{ url_for('auth.logout') }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button class="text-blue-700 hover:underline">Sign out</button>
+          </form>
+        {% endif %}
+      </div>
     </div>
   </header>
   <main class="max-w-6xl mx-auto px-4 py-6">

@@ -23,6 +23,7 @@
     <div class="flex items-center justify-between">
       <h2 class="font-semibold">Recommendation</h2>
       <form method="post" action="{{ url_for('main.analyze', pid=d.paypal_dispute_id) }}" data-once>
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <button class="rounded-md border border-slate-300 px-3 py-1.5 text-sm hover:bg-slate-50"
                 data-busy="Analyzing...">{{ "Re-run analysis" if run else "Run analysis" }}</button>
       </form>
@@ -68,6 +69,7 @@
         {% elif can_approve %}
           <form method="post" action="{{ url_for('main.approve_action', pid=d.paypal_dispute_id) }}" data-once>
             <input type="hidden" name="run_id" value="{{ run.id }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <button id="approve-button" data-busy="Sending to PayPal..."
                     class="rounded-md bg-blue-700 px-4 py-2 text-sm font-medium text-white hover:bg-blue-800">
               Approve: {{ labels[action] }}</button>

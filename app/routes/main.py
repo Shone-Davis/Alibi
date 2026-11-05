@@ -1,4 +1,5 @@
 from flask import Blueprint, abort, current_app, flash, redirect, render_template, request, url_for
+from flask_login import current_user, login_required
 
 from app.labels import label
 from app.models import Action, AgentRun, AuditLog, Dispute
@@ -9,6 +10,12 @@ from app.services.policy import SELLER_ACTIONS, is_urgent
 
 bp = Blueprint("main", __name__)
 bp.add_app_template_filter(label, "label")
+
+
+@bp.before_request
+@login_required
+def require_login():
+    pass
 
 ACTION_LABELS = {
     "provide_evidence": "Submit evidence to PayPal",
@@ -80,7 +87,7 @@ def approve_action(pid):
     run_id = request.form.get("run_id", type=int)
     run = AgentRun.query.filter_by(id=run_id, dispute_id=dispute.id).first_or_404()
     try:
-        action = approve(run, approved_by="seller", client=current_app.extensions["paypal"])
+        action = approve(run, approved_by=current_user.email, client=current_app.extensions["paypal"])
     except ActionBlocked as e:
         flash("Blocked: " + "; ".join(e.reasons), "error")
     else:
