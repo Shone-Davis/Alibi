@@ -1,0 +1,133 @@
+{% extends "base.html" %}
+{% block title %}{{ d.paypal_dispute_id }} · DisputeGuard{% endblock %}
+{% block content %}
+<a href="{{ url_for('main.index') }}" class="text-sm text-blue-700 hover:underline">All disputes</a>
+
+<div class="mt-2 flex flex-wrap items-start justify-between gap-4">
+  <div>
+    <h1 class="text-2xl font-semibold font-mono">{{ d.paypal_dispute_id }}</h1>
+    <p class="mt-1 text-slate-600">{{ d.reason | label }} · {{ d.amount }} {{ d.currency }}</p>
+  </div>
+  <div class="text-right text-sm">
+    <div><span class="text-slate-500">Status</span> <span class="font-medium">{{ d.status | label }}</span></div>
+    <div><span class="text-slate-500">Stage</span> <span class="font-medium">{{ d.stage | label }}</span></div>
+    <div class="{{ 'text-red-700 font-semibold' if urgent }}">
+      <span class="text-slate-500 font-normal">Respond by</span> {{ d.seller_response_due | when }}
+      {% if urgent %}<span class="ml-1 rounded bg-red-100 px-1.5 py-0.5 text-xs">Urgent</span>{% endif %}
+    </div>
+  </div>
+</div>
+
+<div class="mt-6 grid gap-6 lg:grid-cols-3">
+  <section class="lg:col-span-2 rounded-lg border border-slate-200 bg-white p-5">
+    <div class="flex items-center justify-between">
+      <h2 class="font-semibold">Recommendation</h2>
+      <form method="post" action="{{ url_for('main.analyze', pid=d.paypal_dispute_id) }}" data-once>
+        <button class="rounded-md border border-slate-300 px-3 py-1.5 text-sm hover:bg-slate-50"
+                data-busy="Analyzing...">{{ "Re-run analysis" if run else "Run analysis" }}</button>
+      </form>
+    </div>
+
+    {% if not run %}
+      <p class="mt-4 text-sm text-slate-500">No analysis yet.</p>
+    {% elif not run.proposal %}
+      <p class="mt-4 rounded-md bg-amber-50 border border-amber-200 p-3 text-sm text-amber-900">
+        Needs review: {{ run.error }}</p>
+    {% else %}
+      {% set p = run.proposal %}
+      <div class="mt-4 flex items-baseline gap-3">
+        <span class="text-xl font-semibold capitalize">{{ p.recommendation.replace("_", " ") }}</span>
+        <span class="text-sm text-slate-500">{{ (p.confidence * 100) | round | int }}% confidence</span>
+        {% if p.offer_amount %}<span class="text-sm">Offer: {{ p.offer_amount }} {{ d.currency }}</span>{% endif %}
+      </div>
+      <p class="mt-3 text-sm leading-relaxed">{{ p.reasoning }}</p>
+
+      <h3 class="mt-5 text-sm font-semibold text-slate-700">Evidence</h3>
+      <ul class="mt-2 space-y-2 text-sm">
+        {% for e in p.evidence %}
+        <li class="flex gap-3"><a href="#{{ e.record_id.replace(':', '-') }}" class="font-mono text-xs text-blue-700 hover:underline w-24 shrink-0">{{ e.record_id }}</a>{{ e.claim }}</li>
+        {% else %}
+        <li class="text-slate-500">No evidence cited.</li>
+        {% endfor %}
+      </ul>
+
+      <h3 class="mt-5 text-sm font-semibold text-slate-700">Note to PayPal</h3>
+      <p class="mt-2 rounded-md bg-slate-50 p-3 text-sm">{{ p.draft_note }}</p>
+
+      {% if run.policy and not run.policy.allowed %}
+        <div class="mt-5 rounded-md bg-amber-50 border border-amber-200 p-3 text-sm text-amber-900">
+          <p class="font-semibold">Blocked by safety rules</p>
+          <ul class="mt-1 list-disc pl-5">{% for r in run.policy.reasons %}<li>{{ r }}</li>{% endfor %}</ul>
+        </div>
+      {% endif %}
+
+      <div class="mt-6">
+        {% if sent %}
+          <p class="text-sm">{{ labels.get(sent.action_type, sent.action_type) }}:
+            <span class="font-semibold">{{ sent.status }}</span>{% if sent.error %} ({{ sent.error }}){% endif %}</p>
+        {% elif can_approve %}
+          <form method="post" action="{{ url_for('main.approve_action', pid=d.paypal_dispute_id) }}" data-once>
+            <input type="hidden" name="run_id" value="{{ run.id }}">
+            <button id="approve-button" data-busy="Sending to PayPal..."
+                    class="rounded-md bg-blue-700 px-4 py-2 text-sm font-medium text-white hover:bg-blue-800">
+              Approve: {{ labels[action] }}</button>
+          </form>
+          <p class="mt-2 text-xs text-slate-500">Nothing is sent to PayPal until you approve.</p>
+        {% endif %}
+      </div>
+    {% endif %}
+  </section>
+
+  <aside class="space-y-6">
+    <section class="rounded-lg border border-slate-200 bg-white p-5 text-sm">
+      <h2 class="font-semibold">Order records</h2>
+      {% if d.order %}
+        <div id="order-{{ d.order.id }}" class="mt-3 -mx-2 rounded p-2 scroll-mt-4 target:bg-yellow-50">
+          <div class="flex items-center justify-between">
+            <span class="font-medium">Order</span>
+            <span class="font-mono text-xs text-slate-400">order:{{ d.order.id }}</span>
+          </div>
+          <p>{{ d.order.item_description }} · {{ d.order.amount }} {{ d.order.currency }}</p>
+          <p class="text-slate-500">{{ d.order.customer_name }}</p>
+        </div>
+        {% for s in d.order.shipments %}
+        <div id="shipment-{{ s.id }}" class="mt-2 -mx-2 rounded p-2 scroll-mt-4 target:bg-yellow-50">
+          <div class="flex items-center justify-between">
+            <span class="font-medium">Shipment</span>
+            <span class="font-mono text-xs text-slate-400">shipment:{{ s.id }}</span>
+          </div>
+          <p>{{ s.carrier }} · <span class="font-mono">{{ s.tracking_number }}</span></p>
+          <p class="text-slate-500">{{ "Delivered " ~ (s.delivered_at | when) if s.delivered_at else "Not delivered yet" }}</p>
+        </div>
+        {% else %}
+        <p class="mt-3 text-slate-500">No shipment on file.</p>
+        {% endfor %}
+        {% for m in d.order.messages %}
+        <div id="message-{{ m.id }}" class="mt-2 -mx-2 rounded p-2 scroll-mt-4 target:bg-yellow-50">
+          <div class="flex items-center justify-between">
+            <span class="font-medium">Message from {{ m.sender }}</span>
+            <span class="font-mono text-xs text-slate-400">message:{{ m.id }}</span>
+          </div>
+          <p class="text-xs text-slate-500">{{ m.sent_at | when }}</p>
+          <blockquote class="mt-1 border-l-2 border-slate-300 pl-3 text-slate-700">{{ m.body }}</blockquote>
+        </div>
+        {% endfor %}
+      {% else %}
+        <p class="mt-3 text-slate-500">No matching order found.</p>
+      {% endif %}
+    </section>
+
+    <section class="rounded-lg border border-slate-200 bg-white p-5 text-sm">
+      <h2 class="font-semibold">Timeline</h2>
+      <ol class="mt-3 space-y-3">
+        {% for t in timeline %}
+        <li><span class="text-xs text-slate-500">{{ t.created_at | when }}</span><br>
+          <span class="font-medium">{{ t.actor }}</span> · {{ t.event.replace("_", " ") }}</li>
+        {% else %}
+        <li class="text-slate-500">Nothing recorded yet.</li>
+        {% endfor %}
+      </ol>
+    </section>
+  </aside>
+</div>
+{% endblock %}

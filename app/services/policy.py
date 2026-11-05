@@ -4,6 +4,8 @@ from dataclasses import dataclass, field
 from datetime import date as date_cls, datetime, timedelta, timezone
 from decimal import Decimal
 
+from app.labels import label
+
 # The only actions a seller may take. PayPal also lists sandbox test tools
 # (adjudicate, require_evidence); this app never offers those.
 SELLER_ACTIONS = {"provide_evidence", "provide_supporting_info", "make_offer", "accept_claim"}
@@ -73,8 +75,9 @@ def review_proposal(dispute, proposal):
     if action is None or action not in SELLER_ACTIONS:
         reasons.append(f"Unknown recommendation {rec!r}")
     elif action not in (dispute.allowed_actions or []):
-        allowed = ", ".join(dispute.allowed_actions or []) or "none"
-        reasons.append(f"PayPal does not allow '{action}' on this dispute right now (allowed: {allowed})")
+        allowed = ", ".join(label(a) for a in dispute.allowed_actions or []) or "nothing"
+        reasons.append(f"PayPal doesn't currently allow you to {label(action)} on this dispute. "
+                       f"Allowed now: {allowed}.")
 
     # Rule 1: no made-up evidence
     record_ids, numbers, dates = _known_records(dispute)

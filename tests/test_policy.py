@@ -90,7 +90,7 @@ def test_t17_action_not_allowed_by_paypal_blocked(app):
     r = review_proposal(d, fight(ship))
 
     assert not r.allowed
-    assert any("provide_evidence" in x for x in r.reasons)
+    assert any("submit evidence" in x for x in r.reasons)
 
 
 def test_t17_chargeback_stage_uses_supporting_info(app):
