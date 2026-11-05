@@ -34,6 +34,7 @@ def dashboard_rows(now=None):
             "currency": d.currency or "USD",
             "due": d.seller_response_due.isoformat() if d.seller_response_due else None,
             "urgent": is_urgent(d, now=now),
+            "waiting_on_you": d.status in WAITING_ON_SELLER,
             "recommendation": _recommendation(latest_run.get(d.id), d.id in sent),
         }
         for d in disputes

@@ -84,7 +84,8 @@
     const text = new Date(p.value).toLocaleString(undefined, {
       month: "short", day: "numeric", hour: "numeric", minute: "2-digit",
     });
-    const wrap = el("span", p.data.urgent ? "font-semibold text-red-700" : "", text);
+    const tone = p.data.urgent ? "font-semibold text-red-700" : p.data.waiting_on_you ? "" : "text-slate-400";
+    const wrap = el("span", tone, text);
     if (p.data.urgent) wrap.append(" ", badge("Urgent", "bg-red-100 text-red-800"));
     return wrap;
   }
@@ -104,13 +105,15 @@
       valueFormatter: (p) => (p.value == null ? "" : `${p.value.toFixed(2)} ${p.data.currency}`),
     },
     {
-      field: "status", headerName: "Status", minWidth: 170,
+      field: "status", headerName: "Status", minWidth: 210,
       cellRenderer: (p) => badge(p.value, STATUS_TONES[p.data.status_code] || "bg-slate-100 text-slate-700"),
     },
     { field: "stage", headerName: "Stage", maxWidth: 130 },
     {
       field: "recommendation", headerName: "Recommendation", minWidth: 160,
-      cellRenderer: (p) => badge(p.value, RECOMMENDATION_TONES[p.value] || "bg-slate-100 text-slate-700"),
+      cellRenderer: (p) => p.value
+        ? badge(p.value, RECOMMENDATION_TONES[p.value] || "bg-slate-100 text-slate-700")
+        : el("span", "text-slate-400", "Not analyzed"),
     },
     {
       field: "due", headerName: "Respond by", minWidth: 190, sort: "asc",
@@ -121,8 +124,9 @@
   const grid = agGrid.createGrid(document.getElementById("grid"), {
     rowData: rows,
     columnDefs,
-    defaultColDef: { sortable: true, resizable: true, filter: true, flex: 1, minWidth: 110 },
+    defaultColDef: { sortable: true, resizable: true, flex: 1, minWidth: 110, suppressHeaderMenuButton: true },
     domLayout: "autoHeight",
+    suppressCellFocus: true,
     rowClassRules: { "row-urgent": (p) => p.data.urgent },
     overlayNoRowsTemplate: "No disputes yet. New ones arrive automatically from PayPal.",
     onRowClicked: (e) => {
