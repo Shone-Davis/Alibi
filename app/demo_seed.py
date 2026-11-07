@@ -21,10 +21,13 @@ def _tracking(seed):
     return "9400" + digits
 
 
-def seed_orders():
+def seed_orders(dispute_id=None, force_scenario=None):
     now = datetime.now(timezone.utc)
     created = []
-    disputes = Dispute.query.filter(Dispute.order_id.is_(None)).order_by(Dispute.id).all()
+    query = Dispute.query.filter(Dispute.order_id.is_(None))
+    if dispute_id:
+        query = query.filter_by(paypal_dispute_id=dispute_id)
+    disputes = query.order_by(Dispute.id).all()
 
     for i, d in enumerate(disputes):
         if not d.seller_transaction_id:
@@ -34,7 +37,7 @@ def seed_orders():
             d.order_id = existing.id
             continue
 
-        scenario = SCENARIOS[i % len(SCENARIOS)]
+        scenario = force_scenario or SCENARIOS[i % len(SCENARIOS)]
         name, email = CUSTOMERS[i % len(CUSTOMERS)]
         order = Order(
             paypal_transaction_id=d.seller_transaction_id,

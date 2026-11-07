@@ -65,10 +65,13 @@ def create_app():
         print(f"Synced {n} dispute(s)")
 
     @app.cli.command("seed")
-    def seed_cmd():
-        """Create fake shop orders for disputes that don't have one yet."""
+    @click.argument("dispute_id", required=False)
+    @click.argument("scenario", required=False,
+                    type=click.Choice(["delivered", "no_tracking", "in_transit", "injection"]))
+    def seed_cmd(dispute_id, scenario):
+        """Create demo orders for disputes without one, optionally for one dispute and scenario."""
         from app.demo_seed import seed_orders
-        created = seed_orders()
+        created = seed_orders(dispute_id, scenario)
         for dispute_id, scenario in created:
             print(f"  {dispute_id}: {scenario}")
         print(f"Seeded {len(created)} order(s)")
