@@ -118,3 +118,43 @@ def test_t24_dashboard_page_renders_grid(app, client):
     assert page.status_code == 200
     assert b'id="grid"' in page.data
     assert b"PP-D-1" in page.data
+
+
+def test_settings_saved_and_audited(app, client):
+    from app.models import AuditLog
+    from app.services.settings import get_settings
+
+    r = client.post("/settings", data={"refund_threshold": "20", "urgent_hours": "504"})
+
+    assert r.status_code == 302
+    s = get_settings()
+    assert (str(s.refund_threshold), s.urgent_hours) == ("20.00", 504)
+    assert AuditLog.query.one().event == "settings_changed"
+
+
+def test_invalid_settings_rejected(app, client):
+    from app.services.settings import get_settings
+
+    for bad in ({"refund_threshold": "-5", "urgent_hours": "48"},
+                {"refund_threshold": "NaN", "urgent_hours": "48"},
+                {"refund_threshold": "15", "urgent_hours": "0"},
+                {"refund_threshold": "abc", "urgent_hours": "48"}):
+        client.post("/settings", data=bad)
+
+    s = get_settings()
+    assert (str(s.refund_threshold), s.urgent_hours) == ("15.00", 48)
+
+
+def test_urgency_window_comes_from_settings(app, client):
+    from datetime import datetime, timedelta, timezone
+
+    from app.services.dashboard import dashboard_rows
+
+    now = datetime(2026, 11, 5, 12, tzinfo=timezone.utc)
+    db.session.add(Dispute(paypal_dispute_id="PP-TEN-DAYS", status="WAITING_FOR_SELLER_RESPONSE",
+                           amount=10, seller_response_due=now + timedelta(days=10)))
+    db.session.commit()
+
+    assert dashboard_rows(now=now)[0][0]["urgent"] is False
+    client.post("/settings", data={"refund_threshold": "15", "urgent_hours": "504"})
+    assert dashboard_rows(now=now)[0][0]["urgent"] is True

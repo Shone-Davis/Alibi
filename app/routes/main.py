@@ -1,12 +1,17 @@
+from decimal import Decimal, InvalidOperation
+
 from flask import Blueprint, abort, current_app, flash, redirect, render_template, request, url_for
 from flask_login import current_user, login_required
 
+from app import db
 from app.labels import label
 from app.models import Action, AgentRun, AuditLog, Dispute
 from app.services.actions import ActionBlocked, approve
 from app.services.agent import run_agent
 from app.services.dashboard import dashboard_rows
+from app.services.audit import record
 from app.services.policy import SELLER_ACTIONS, is_urgent
+from app.services.settings import get_settings
 
 bp = Blueprint("main", __name__)
 bp.add_app_template_filter(label, "label")
@@ -65,7 +70,7 @@ def dispute_detail(pid):
         action=action,
         can_approve=can_approve,
         timeline=timeline,
-        urgent=is_urgent(dispute),
+        urgent=is_urgent(dispute, hours=get_settings().urgent_hours),
         labels=ACTION_LABELS,
     )
 
@@ -96,3 +101,29 @@ def approve_action(pid):
         else:
             flash(f"PayPal rejected the action: {action.error}", "error")
     return redirect(url_for("main.dispute_detail", pid=pid))
+
+
+@bp.route("/settings", methods=["GET", "POST"])
+def settings():
+    current = get_settings()
+    if request.method == "POST":
+        try:
+            threshold = Decimal(request.form.get("refund_threshold", ""))
+            hours = int(request.form.get("urgent_hours", ""))
+        except (InvalidOperation, ValueError):
+            flash("Enter a number for both settings.", "error")
+        else:
+            if not threshold.is_finite() or not 0 <= threshold <= 10000 or not 1 <= hours <= 720:
+                flash("Refund threshold must be 0 to 10,000 and the urgency window 1 to 720 hours.", "error")
+            else:
+                current.refund_threshold = threshold
+                current.urgent_hours = hours
+                record(None, "seller", "settings_changed", {
+                    "by": current_user.email,
+                    "refund_threshold": str(threshold),
+                    "urgent_hours": hours,
+                })
+                db.session.commit()
+                flash("Settings saved.", "success")
+                return redirect(url_for("main.settings"))
+    return render_template("settings.html", s=current)

@@ -150,3 +150,12 @@ class User(UserMixin, db.Model):
 
     def check_password(self, password):
         return check_password_hash(self.password_hash, password)
+
+
+class Setting(db.Model):
+    __tablename__ = "settings"
+
+    id = db.Column(db.Integer, primary_key=True)
+    refund_threshold = db.Column(db.Numeric(12, 2), nullable=False, default=15)
+    urgent_hours = db.Column(db.Integer, nullable=False, default=48)
+    updated_at = db.Column(db.DateTime(timezone=True), default=utcnow, onupdate=utcnow)

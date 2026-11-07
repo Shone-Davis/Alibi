@@ -7,6 +7,7 @@ from app import db
 from app.models import AgentRun
 from app.services.audit import record
 from app.services.policy import review_proposal
+from app.services.settings import get_settings
 
 log = logging.getLogger(__name__)
 
@@ -146,7 +147,7 @@ def run_agent(dispute, llm=None, threshold=None):
     real = llm is None
     llm = llm or anthropic_llm
     if threshold is None:
-        threshold = float(os.environ.get("SMALL_AMOUNT_THRESHOLD", "15"))
+        threshold = get_settings().refund_threshold
 
     ctx = build_context(dispute, threshold)
     user = "Dispute and seller records:\n" + json.dumps(ctx, indent=2)
