@@ -3,14 +3,14 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>{% block title %}DisputeGuard{% endblock %}</title>
+  <title>{% block title %}Alibi{% endblock %}</title>
   <script src="https://cdn.tailwindcss.com"></script>
   {% block head %}{% endblock %}
 </head>
 <body class="bg-slate-50 text-slate-900 antialiased">
   <header class="bg-white border-b border-slate-200">
     <div class="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between">
-      <a href="{{ url_for('main.index') }}" class="font-semibold tracking-tight">DisputeGuard</a>
+      <a href="{{ url_for('main.index') }}" class="font-semibold tracking-tight">Alibi</a>
       <div class="flex items-center gap-4 text-xs text-slate-500">
         <span>PayPal sandbox</span>
         {% if current_user.is_authenticated %}

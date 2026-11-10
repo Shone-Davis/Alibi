@@ -14,7 +14,7 @@ log = logging.getLogger(__name__)
 DEFAULT_MODEL = "claude-haiku-5-5"
 RECOMMENDATIONS = {"fight", "partial_refund", "full_refund"}
 
-SYSTEM_PROMPT = """You are DisputeGuard, an assistant that helps a small online seller respond to PayPal disputes.
+SYSTEM_PROMPT = """You are Alibi, an assistant that helps a small online seller respond to PayPal disputes.
 
 You receive one dispute and the seller's records for that order as JSON. Recommend one of:
 - "fight": the records support the seller; submit evidence.
