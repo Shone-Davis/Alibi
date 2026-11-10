@@ -26,7 +26,7 @@ When a buyer opens a PayPal dispute, a small seller has a deadline, a pile of or
 
 **The AI proposes. Plain code checks its citations, identifiers and actions. A person approves anything sent to PayPal.**
 
-The AI is good at reading records and writing a clear case. It is not trusted to be right. Every proposal passes through safety rules written in ordinary Python before the seller sees an Approve button, and again immediately before anything is sent.
+The AI is good at reading records and writing a clear case. It is not trusted to be right. Every proposal passes through safety rules written in ordinary Python before the seller sees an Approve button, and again immediately before anything is sent. AI-generated recommendations never trigger a financial action on their own; final authorization stays with the seller.
 
 ## What it does
 
@@ -35,14 +35,14 @@ The AI is good at reading records and writing a clear case. It is not trusted to
 3. **Builds a recommendation.** Claude reads the dispute and records and returns strict JSON: a recommendation, confidence, reasoning, evidence items that cite records by ID, and a note to PayPal. Malformed output gets one retry, then the dispute is marked "needs review".
 4. **Checks it.** The safety rules below decide whether the proposal can be approved. Blocked proposals are shown with plain-language reasons.
 5. **Waits for the seller.** The dispute page shows the reasoning, each piece of evidence linked to the record it cites, and an Approve button only when PayPal currently allows that action.
-6. **Guards against duplicate submissions.** Each AI proposal can be approved once: a unique database record blocks repeated clicks and concurrent requests, and every PayPal call carries a `PayPal-Request-Id` so PayPal can deduplicate where it supports it. If PayPal doesn't respond, the action is marked failed; a retry starts from a fresh analysis, and the live allowed-actions check blocks it if PayPal already acted.
+6. **Guards against duplicate submissions.** Each AI proposal can be approved once: a unique database record blocks repeated clicks and concurrent requests, and every seller-approved action sent to PayPal includes a `PayPal-Request-Id` for idempotency where PayPal supports it. If PayPal doesn't respond, the action is marked failed; a retry starts from a fresh analysis, and the live allowed-actions check blocks it if PayPal already acted.
 7. **Records everything.** Webhooks received, AI proposals, rule decisions, seller approvals, PayPal's responses and settings changes go to an audit log, shown as a timeline on each dispute.
 
 ## Safety rules
 
 Implemented in `app/services/policy.py`.
 
-- **Checked citations and identifiers.** Every cited record ID must belong to this dispute's order. Tracking and transaction numbers, dates written as `2026-10-30` or `October 30, 2026`, and dollar amounts that appear in the evidence or the note to PayPal must match the records. These checks cover identifiers, dates and amounts, not every statement in the AI's wording, which is one reason the seller reviews every proposal.
+- **Checked citations and identifiers.** Every cited record ID must belong to this dispute's order. Tracking and transaction numbers, and dates written as `2026-10-30` or `October 30, 2026`, that appear in the evidence or the note to PayPal must match the records. Dollar amounts in that text must match the disputed amount, the order amount, or the proposal's own refund offer (which is separately capped at the disputed amount). These checks cover identifiers, dates and amounts, not every statement in the AI's wording, which is one reason the seller reviews every proposal.
 - **Only actions PayPal allows right now.** The action must be in the dispute's current allowed actions. Before sending, Alibi re-fetches the dispute from PayPal and checks again, because allowed actions change.
 - **The right action for the stage.** A fight uses provide-evidence during an inquiry and provide-supporting-info at the chargeback stage. A partial refund uses make-offer, which the buyer can accept or decline; a full refund uses accept-claim. Sandbox-only tools such as adjudicate are never offered.
 - **Offers are bounded.** A partial refund must be positive and can never exceed the disputed amount.
@@ -54,15 +54,20 @@ The refund threshold (default $15) and urgency window (default 48 hours) are sel
 
 ## Security
 
-- Seller login on every page, with hashed passwords and login attempts limited to 10 per minute per address.
+- Dispute-management pages require seller authentication. Only the login page and the PayPal webhook endpoint are public, and each webhook event's signature is verified with PayPal before anything is saved.
+- Passwords are hashed, and login attempts are limited to 10 per minute per address.
 - CSRF tokens on every form; secure, HTTP-only session cookies in production.
-- The PayPal webhook is the only public route, and each event's signature is verified with PayPal before anything is saved.
 - Login redirects only stay on this site.
 - Secrets live in environment variables, never in the repository.
 
+## AI and tools used
+
+- **Anthropic Claude Haiku, inside the app.** Powers the dispute analysis. For each dispute it reads the dispute details and the seller's records and returns a structured recommendation, cited evidence and a draft note to PayPal. Every proposal goes through schema validation, deterministic policy checks and seller approval before anything is submitted.
+- **PayPal Developer Platform (sandbox).** The Disputes API to retrieve disputes and submit seller-approved actions, Webhooks for verified event notifications, and the Orders API to create sandbox test transactions.
+
 ## Tech stack
 
-Flask, SQLAlchemy, PostgreSQL, Flask-Migrate, Flask-Login, Flask-WTF, Flask-Limiter, Tailwind CSS, AG Grid, Anthropic Claude (Haiku), PayPal Disputes and Webhooks APIs, hosted on Render.
+Flask, SQLAlchemy, PostgreSQL, Flask-Migrate, Flask-Login, Flask-WTF, Flask-Limiter, Tailwind CSS, AG Grid, Anthropic Claude Haiku, PayPal Disputes, Webhooks and Orders APIs, hosted on Render.
 
 ## Running it locally
 
@@ -108,21 +113,22 @@ python -m pytest -q
 
 ## Project structure
 
+```text
 app/
-paypal/client.py PayPal API client: token caching, retries, pagination, dispute actions
-paypal/webhooks.py Signed webhook receiver
-services/sync.py Saves disputes, keeps the last known deadline, matches orders
-services/agent.py AI evidence builder
-services/policy.py Safety rules
-services/actions.py Approval flow and PayPal calls
-services/audit.py Audit log
-services/dashboard.py Dashboard data
-routes/ Dashboard, dispute pages, settings, login
-templates/
+  paypal/client.py       PayPal API client: token caching, retries, pagination, dispute actions
+  paypal/webhooks.py     Signed webhook receiver
+  services/sync.py       Saves disputes, keeps the last known deadline, matches orders
+  services/agent.py      AI evidence builder
+  services/policy.py     Safety rules
+  services/actions.py    Approval flow and PayPal calls
+  services/audit.py      Audit log
+  services/dashboard.py  Dashboard data
+  routes/                Dashboard, dispute pages, settings, login
+  templates/
 tests/
 migrations/
 scripts/dispute_spike.py The original sandbox experiment that proved the API flow
-
+```
 
 ## Limitations
 
