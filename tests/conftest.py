@@ -12,6 +12,8 @@ os.environ["PAYPAL_BASE_URL"] = "https://api.test.paypal"
 def app():
     app = create_app()
     app.config["WTF_CSRF_ENABLED"] = False
+    from app import limiter
+    limiter.reset()
     with app.app_context():
         db.drop_all()
         db.create_all()

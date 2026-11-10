@@ -2,6 +2,7 @@ import json
 import logging
 import os
 import time
+from urllib.parse import urlsplit
 
 import requests
 
@@ -76,11 +77,18 @@ class PayPalClient:
 
     # disputes
 
-    def list_disputes(self, page_size=10):
-        data = self._request(
-            "GET", "/v1/customer/disputes", params={"page_size": page_size}
-        )
-        return data.get("items", [])
+    def list_disputes(self, page_size=50, max_pages=20):
+        """Every dispute on the account, following PayPal's next-page links."""
+        items, path, params = [], "/v1/customer/disputes", {"page_size": page_size}
+        for _ in range(max_pages):
+            data = self._request("GET", path, params=params)
+            items.extend(data.get("items", []))
+            next_href = next((l["href"] for l in data.get("links", []) if l.get("rel") == "next"), None)
+            if not next_href:
+                break
+            parts = urlsplit(next_href)
+            path, params = parts.path + (f"?{parts.query}" if parts.query else ""), None
+        return items
 
     def get_dispute(self, dispute_id):
         return self._request("GET", f"/v1/customer/disputes/{dispute_id}")

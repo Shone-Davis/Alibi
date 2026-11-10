@@ -21,6 +21,11 @@ WRITTEN_DATE_RE = re.compile(
 )
 MONTHS = {m: i for i, m in enumerate(
     ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"], start=1)}
+AMOUNT_RE = re.compile(r"\$\s?(\d[\d,]*(?:\.\d{1,2})?)|\b(\d[\d,]*\.\d{2})\s?USD\b")
+
+
+def _cents(value):
+    return Decimal(str(value).replace(",", "")).quantize(Decimal("0.01"))
 
 
 @dataclass
@@ -104,6 +109,16 @@ def review_proposal(dispute, proposal):
             continue
         if iso not in dates:
             reasons.append(f"Mentions date {m.group(0)}, which isn't in the records")
+
+    order = dispute.order
+    known_amounts = {
+        _cents(v)
+        for v in (dispute.amount, order.amount if order else None, proposal.get("offer_amount"))
+        if v is not None
+    }
+    for m in AMOUNT_RE.finditer(text):
+        if _cents(m.group(1) or m.group(2)) not in known_amounts:
+            reasons.append(f"Mentions amount {m.group(0).strip()}, which isn't in the records")
 
     # Rule 4: an offer is positive and never more than the disputed amount
     offer = proposal.get("offer_amount")

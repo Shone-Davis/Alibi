@@ -1,6 +1,7 @@
 """Sends a seller-approved proposal to PayPal, exactly once."""
 from datetime import datetime, timezone
 
+import requests
 from sqlalchemy.exc import IntegrityError
 
 from app import db
@@ -62,7 +63,7 @@ def approve(run, approved_by, client):
     # Allowed actions go stale, so confirm PayPal's current state before sending.
     try:
         save_dispute(client.get_dispute(dispute.paypal_dispute_id))
-    except PayPalError as e:
+    except (PayPalError, requests.RequestException) as e:
         raise ActionBlocked([f"Couldn't confirm the dispute's current state with PayPal: {e}"])
 
     result = check_execution(dispute, run.proposal, approved_by)
@@ -97,6 +98,15 @@ def approve(run, approved_by, client):
 
     try:
         response = _send(client, dispute, run.proposal, result.action, key)
+    except requests.RequestException as e:
+        # PayPal may or may not have received it. A retry starts from a fresh analysis,
+        # and the live allowed-actions check blocks it if PayPal already acted.
+        action.status = "failed"
+        action.error = ("No response from PayPal. Re-run the analysis to check the dispute's "
+                        "current state before trying again.")
+        record(dispute, "paypal", "paypal_no_response", {"action": result.action, "error": str(e)})
+        db.session.commit()
+        return action
     except PayPalError as e:
         action.status = "failed"
         action.error = str(e)
@@ -111,7 +121,7 @@ def approve(run, approved_by, client):
     record(dispute, "paypal", "paypal_action_sent", {"action": result.action})
     try:
         save_dispute(client.get_dispute(dispute.paypal_dispute_id))
-    except PayPalError:
+    except (PayPalError, requests.RequestException):
         pass  # the next webhook brings the new status
     db.session.commit()
     return action

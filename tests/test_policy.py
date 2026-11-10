@@ -180,3 +180,18 @@ def test_t20_not_urgent_once_waiting_on_buyer(app):
     d.status = "WAITING_FOR_BUYER_RESPONSE"
 
     assert not is_urgent(d, now=NOW)
+
+
+def test_made_up_amount_in_note_blocked(app):
+    d, ship = make_case()
+    r = review_proposal(d, fight(ship, draft_note=f"Tracking {TRACKING}. The buyer was refunded $500."))
+
+    assert not r.allowed
+    assert any("$500" in x for x in r.reasons)
+
+
+def test_real_amount_in_note_allowed(app):
+    d, ship = make_case()
+    r = review_proposal(d, fight(ship, draft_note=f"The $25.00 order (25.00 USD) shipped with tracking {TRACKING}."))
+
+    assert r.allowed, r.reasons

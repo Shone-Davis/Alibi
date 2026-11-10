@@ -4,15 +4,19 @@ import os
 import click
 from dotenv import load_dotenv
 from flask import Flask
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
 from flask_login import LoginManager
 from flask_migrate import Migrate
 from flask_sqlalchemy import SQLAlchemy
 from flask_wtf.csrf import CSRFProtect
+from werkzeug.middleware.proxy_fix import ProxyFix
 
 db = SQLAlchemy()
 migrate = Migrate()
 login_manager = LoginManager()
 csrf = CSRFProtect()
+limiter = Limiter(get_remote_address, storage_uri="memory://")
 
 
 def _database_url():
@@ -26,6 +30,8 @@ def _database_url():
 def create_app():
     load_dotenv()
     app = Flask(__name__)
+    if os.environ.get("RENDER"):
+        app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1)  # real client IP behind Render's proxy
     app.config["SQLALCHEMY_DATABASE_URI"] = _database_url()
     app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY", "dev-only")
     app.config["SESSION_COOKIE_SECURE"] = bool(os.environ.get("RENDER"))
@@ -34,6 +40,7 @@ def create_app():
     db.init_app(app)
     migrate.init_app(app, db)
     csrf.init_app(app)
+    limiter.init_app(app)
     login_manager.init_app(app)
     login_manager.login_view = "auth.login"
     login_manager.login_message = None
@@ -97,17 +104,22 @@ def create_app():
 
     @app.cli.command("approve")
     @click.argument("dispute_id")
-    def approve_cmd(dispute_id):
+    @click.option("--as", "approver", required=True, help="Email of an existing seller login.")
+    def approve_cmd(dispute_id, approver):
         """Approve the latest proposal that passed the safety rules and send it to PayPal."""
-        from app.models import AgentRun, Dispute
+        from app.models import AgentRun, Dispute, User
         from app.services.actions import ActionBlocked, approve
+        seller = User.query.filter_by(email=approver.strip().lower()).first()
+        if seller is None:
+            print(f"No seller login for {approver}. Create one with: flask --app run create-user EMAIL")
+            return
         d = Dispute.query.filter_by(paypal_dispute_id=dispute_id).first()
         run = d and AgentRun.query.filter_by(dispute_id=d.id, status="ok").order_by(AgentRun.id.desc()).first()
         if not run:
             print(f"No proposal has passed the safety rules. Run: flask --app run analyze {dispute_id}")
             return
         try:
-            action = approve(run, approved_by="seller:cli", client=app.extensions["paypal"])
+            action = approve(run, approved_by=f"{seller.email} (cli)", client=app.extensions["paypal"])
         except ActionBlocked as e:
             print("Blocked: " + "; ".join(e.reasons))
             return

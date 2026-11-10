@@ -48,3 +48,14 @@ def test_forms_require_csrf_token(app, client):
     r = client.post("/disputes/PP-D-1/analyze")
 
     assert r.status_code == 400
+
+
+def test_login_attempts_are_rate_limited(app, seller):
+    c = app.test_client()
+    codes = [
+        c.post("/login", data={"email": "seller@example.com", "password": "wrong"}).status_code
+        for _ in range(11)
+    ]
+
+    assert codes[:10] == [200] * 10
+    assert codes[10] == 429

@@ -147,3 +147,19 @@ def test_paypal_rejection_marks_action_failed_with_debug_id(app):
 
     assert action.status == "failed"
     assert "dbg-422" in action.error
+
+
+def test_no_response_from_paypal_marks_action_failed(app):
+    import requests
+
+    class SilentPayPal(FakePayPal):
+        def provide_evidence(self, dispute_id, evidences, request_id=None):
+            raise requests.Timeout("timed out")
+
+    paypal = SilentPayPal(paypal_json())
+    _, run = setup_case(paypal)
+
+    action = approve(run, approved_by="seller", client=paypal)
+
+    assert action.status == "failed"
+    assert "No response from PayPal" in action.error

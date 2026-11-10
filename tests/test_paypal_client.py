@@ -135,3 +135,18 @@ def test_t4_provide_evidence_is_multipart_with_json_input():
     assert req.headers["PayPal-Request-Id"] == "key-1"
     assert 'name="input"' in body
     assert '"evidence_type": "OTHER"' in body
+
+
+@responses.activate
+def test_list_disputes_follows_next_page_links():
+    add_token()
+    responses.add(responses.GET, DISPUTES_URL, json={
+        "items": [{"dispute_id": "PP-D-1"}],
+        "links": [{"rel": "next", "href": f"{DISPUTES_URL}?page_size=50&next_page_token=abc"}],
+    })
+    responses.add(responses.GET, DISPUTES_URL, json={"items": [{"dispute_id": "PP-D-2"}], "links": []})
+
+    items = make_client().list_disputes()
+
+    assert [i["dispute_id"] for i in items] == ["PP-D-1", "PP-D-2"]
+    assert "next_page_token=abc" in responses.calls[-1].request.url
