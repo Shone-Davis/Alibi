@@ -95,7 +95,6 @@ def link_names(dispute):
     return [l.get("rel") for l in dispute.get("links", [])]
 
 
-# ---------------------------------------------------------------- commands
 
 
 def cmd_token():
