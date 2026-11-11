@@ -10,7 +10,6 @@ When a buyer opens a PayPal dispute, a small seller has a deadline, a pile of or
 **Demo video:** https://youtu.be/YOUR_VIDEO_ID
 -->
 
-<!-- SCREENSHOTS: add the PNGs to docs/screenshots/, then remove these comment markers
 ## Screenshots
 
 | Dashboard | Dispute review |
@@ -20,7 +19,6 @@ When a buyer opens a PayPal dispute, a small seller has a deadline, a pile of or
 | Blocked by safety rules | Settings |
 |---|---|
 | ![A proposal blocked because PayPal no longer allows the action](docs/screenshots/blocked.png) | ![Refund threshold and urgency window](docs/screenshots/settings.png) |
--->
 
 ## The rule behind the design
 
