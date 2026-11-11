@@ -1,135 +1,242 @@
 {% extends "base.html" %}
-{% block title %}{{ d.paypal_dispute_id }} · Alibi{% endblock %}
-{% block content %}
-<a href="{{ url_for('main.index') }}" class="text-sm text-blue-700 hover:underline">All disputes</a>
+{% block title %}{{ d.order.customer_name if d.order else d.paypal_dispute_id }} · Alibi{% endblock %}
+{% block head %}
+<style>
+  .record { scroll-margin-top: 1.5rem; transition: background-color .4s; }
+  .record:target { background-color: #F4EBD6; }
+</style>
+{% endblock %}
 
-<div class="mt-2 flex flex-wrap items-start justify-between gap-4">
-  <div>
-    <h1 class="text-2xl font-semibold font-mono">{{ d.paypal_dispute_id }}</h1>
-    <p class="mt-1 text-slate-600">{{ d.reason | label }} · {{ d.amount }} {{ d.currency }}</p>
+{% block content %}
+{% set p = run.proposal if run and run.proposal else None %}
+{% set waiting = d.status in ("OPEN", "WAITING_FOR_SELLER_RESPONSE") %}
+
+<a href="{{ url_for('main.index') }}" class="inline-flex items-center gap-1.5 text-sm text-slate hover:text-ink">
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg>
+  All disputes
+</a>
+
+<div class="mt-3 flex flex-wrap items-start justify-between gap-6">
+  <div class="min-w-0">
+    <h1 class="font-serif text-[2.4rem] leading-tight text-ink">{{ d.order.customer_name if d.order else "Order not matched" }}</h1>
+    <p class="mt-1 text-slate">
+      {% if d.order %}{{ d.order.item_description }}, {% endif %}{{ d.reason | label | lower }}
+      <span class="ml-2 text-sm text-slate/70 tabular-nums">{{ d.paypal_dispute_id }}</span>
+    </p>
   </div>
-  <div class="text-right text-sm">
-    <div><span class="text-slate-500">Status</span> <span class="font-medium">{{ d.status | label }}</span></div>
-    <div><span class="text-slate-500">Stage</span> <span class="font-medium">{{ d.stage | label }}</span></div>
-    <div class="{{ 'text-red-700 font-semibold' if urgent }}">
-      <span class="text-slate-500 font-normal">Respond by</span> {{ d.seller_response_due | when }}
-      {% if urgent %}<span class="ml-1 rounded bg-red-100 px-1.5 py-0.5 text-xs">Urgent</span>{% endif %}
+  <div class="flex gap-10 text-right">
+    <div>
+      <p class="text-sm text-slate">Disputed</p>
+      <p class="mt-1 text-[2rem] font-semibold tracking-tight tabular-nums text-ink">
+        {{ "$%.2f" | format(d.amount) if d.amount is not none else "Unknown" }}</p>
+    </div>
+    <div>
+      <p class="text-sm text-slate">Time left</p>
+      {% if d.seller_response_due and waiting %}
+        <p id="time-left" data-due="{{ d.seller_response_due.isoformat() }}"
+           class="mt-1 text-[2rem] font-semibold tracking-tight tabular-nums {{ 'text-rust' if urgent else 'text-ink' }}">&nbsp;</p>
+      {% else %}
+        <p class="mt-1 text-[2rem] font-semibold tracking-tight text-slate/50">None</p>
+      {% endif %}
     </div>
   </div>
 </div>
 
-<div class="mt-6 grid gap-6 lg:grid-cols-3">
-  <section class="lg:col-span-2 rounded-lg border border-slate-200 bg-white p-5">
-    <div class="flex items-center justify-between">
-      <h2 class="font-semibold">Recommendation</h2>
-      <form method="post" action="{{ url_for('main.analyze', pid=d.paypal_dispute_id) }}" data-once>
-        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-        <button class="rounded-md border border-slate-300 px-3 py-1.5 text-sm hover:bg-slate-50"
-                data-busy="Analyzing...">{{ "Re-run analysis" if run else "Run analysis" }}</button>
-      </form>
+{% if not run %}
+<section class="mt-8 rounded-2xl border border-line bg-paper p-6 sm:p-8">
+  <h2 class="font-serif text-[2rem] leading-tight text-ink">No recommendation yet.</h2>
+  <p class="mt-2 max-w-2xl text-slate">Alibi reads this dispute and your records, then recommends whether to fight
+    or refund. Nothing is sent to PayPal until you approve.</p>
+  <form method="post" action="{{ url_for('main.analyze', pid=d.paypal_dispute_id) }}" data-once class="mt-6">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <button data-busy="Reading the records..."
+            class="rounded-lg bg-ink px-5 py-2.5 text-sm font-medium text-white hover:bg-inkdeep">Analyze this dispute</button>
+  </form>
+</section>
+
+{% elif not p %}
+<section class="mt-8 rounded-2xl border border-[#EBC9BE] bg-rustsoft p-6 sm:p-8">
+  <h2 class="font-serif text-[2rem] leading-tight text-rust">This one needs your review.</h2>
+  <p class="mt-2 max-w-3xl text-rust/90">{{ run.error }}</p>
+  <form method="post" action="{{ url_for('main.analyze', pid=d.paypal_dispute_id) }}" data-once class="mt-6">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <button data-busy="Reading the records..."
+            class="rounded-lg bg-rust px-5 py-2.5 text-sm font-medium text-white hover:opacity-90">Analyze again</button>
+  </form>
+</section>
+
+{% else %}
+<section class="mt-8 rounded-2xl bg-ink p-6 text-white sm:p-8">
+  <div class="grid gap-8 lg:grid-cols-[1fr_20rem]">
+    <div>
+      <p class="text-sm text-white/70">Alibi recommends</p>
+      <h2 class="mt-1 font-serif text-[2.6rem] leading-tight">
+        {% if p.recommendation == "fight" %}Fight this dispute.
+        {% elif p.recommendation == "partial_refund" %}Offer a ${{ "%.2f" | format(p.offer_amount) }} refund.
+        {% else %}Refund this one in full.{% endif %}
+      </h2>
+      <p class="mt-1 text-sm text-white/70">{{ (p.confidence * 100) | round | int }}% confidence</p>
+      <p class="mt-4 max-w-3xl leading-relaxed text-white/90">{{ p.reasoning }}</p>
     </div>
 
-    {% if not run %}
-      <p class="mt-4 text-sm text-slate-500">No analysis yet.</p>
-    {% elif not run.proposal %}
-      <p class="mt-4 rounded-md bg-amber-50 border border-amber-200 p-3 text-sm text-amber-900">
-        Needs review: {{ run.error }}</p>
-    {% else %}
-      {% set p = run.proposal %}
-      <div class="mt-4 flex items-baseline gap-3">
-        <span class="text-xl font-semibold capitalize">{{ p.recommendation.replace("_", " ") }}</span>
-        <span class="text-sm text-slate-500">{{ (p.confidence * 100) | round | int }}% confidence</span>
-        {% if p.offer_amount %}<span class="text-sm">Offer: {{ p.offer_amount }} {{ d.currency }}</span>{% endif %}
-      </div>
-      <p class="mt-3 text-sm leading-relaxed">{{ p.reasoning }}</p>
+    <div class="space-y-3">
+      {% if sent %}
+        <div class="rounded-xl bg-white/10 p-4">
+          <p class="font-medium">{{ "Sent to PayPal" if sent.status == "sent" else "Not sent" }}</p>
+          <p class="mt-1 text-sm text-white/75">{{ labels.get(sent.action_type, sent.action_type) }}{% if sent.status != "sent" %}: {{ sent.error }}{% endif %}</p>
+        </div>
+      {% elif can_approve %}
+        <form method="post" action="{{ url_for('main.approve_action', pid=d.paypal_dispute_id) }}" data-once class="space-y-3">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <input type="hidden" name="run_id" value="{{ run.id }}">
+          {% if money_action %}
+            <label class="flex items-start gap-2.5 text-sm text-white/90">
+              <input type="checkbox" name="confirm" value="yes" required class="mt-0.5 h-4 w-4 accent-[#D9B865]">
+              I've read the note and want to refund
+              {{ "$%.2f" | format(p.offer_amount if action == "make_offer" else d.amount) }} to the buyer.
+            </label>
+          {% endif %}
+          <button id="approve-button" data-busy="Sending to PayPal..."
+                  class="w-full rounded-lg bg-white px-4 py-3 text-sm font-semibold text-ink hover:bg-brasssoft">
+            Approve: {{ labels[action] }}</button>
+          <p class="text-xs text-white/65">Nothing is sent to PayPal until you approve.</p>
+        </form>
+      {% elif run.policy and not run.policy.allowed %}
+        <div class="rounded-xl bg-white/10 p-4 text-sm">
+          <p class="font-medium">Can't be approved</p>
+          <p class="mt-1 text-white/75">A safety rule stopped this recommendation. See the reasons below.</p>
+        </div>
+      {% else %}
+        <div class="rounded-xl bg-white/10 p-4 text-sm">
+          <p class="font-medium">PayPal no longer allows this</p>
+          <p class="mt-1 text-white/75">The dispute has moved on. Analyze again to get a current recommendation.</p>
+        </div>
+      {% endif %}
+      <form method="post" action="{{ url_for('main.analyze', pid=d.paypal_dispute_id) }}" data-once>
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button data-busy="Reading the records..."
+                class="w-full rounded-lg border border-white/30 px-4 py-2.5 text-sm text-white hover:bg-white/10">Analyze again</button>
+      </form>
+    </div>
+  </div>
 
-      <h3 class="mt-5 text-sm font-semibold text-slate-700">Evidence</h3>
-      <ul class="mt-2 space-y-2 text-sm">
-        {% for e in p.evidence %}
-        <li class="flex gap-3"><a href="#{{ e.record_id.replace(':', '-') }}" class="font-mono text-xs text-blue-700 hover:underline w-24 shrink-0">{{ e.record_id }}</a>{{ e.claim }}</li>
-        {% else %}
-        <li class="text-slate-500">No evidence cited.</li>
+  <div class="mt-8 border-t border-white/15 pt-6">
+    {% if run.policy and run.policy.allowed %}
+      <p class="text-sm font-medium">Checked before you approve</p>
+      <ul class="mt-3 grid gap-x-8 gap-y-2 text-sm text-white/90 sm:grid-cols-2">
+        {% for check in ["Every citation matches one of your records",
+                         "Tracking numbers, dates and amounts match the records",
+                         "PayPal allows this action on the dispute right now",
+                         "Any refund stays within the disputed amount",
+                         "Nothing is sent without your approval"] %}
+          <li class="flex items-start gap-2.5">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#D9B865" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" class="mt-0.5 shrink-0" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>
+            {{ check }}
+          </li>
         {% endfor %}
       </ul>
-
-      <h3 class="mt-5 text-sm font-semibold text-slate-700">Note to PayPal</h3>
-      <p class="mt-2 rounded-md bg-slate-50 p-3 text-sm">{{ p.draft_note }}</p>
-
-      {% if run.policy and not run.policy.allowed %}
-        <div class="mt-5 rounded-md bg-amber-50 border border-amber-200 p-3 text-sm text-amber-900">
-          <p class="font-semibold">Blocked by safety rules</p>
-          <ul class="mt-1 list-disc pl-5">{% for r in run.policy.reasons %}<li>{{ r }}</li>{% endfor %}</ul>
-        </div>
-      {% endif %}
-
-      <div class="mt-6">
-        {% if sent %}
-          <p class="text-sm">{{ labels.get(sent.action_type, sent.action_type) }}:
-            <span class="font-semibold">{{ sent.status }}</span>{% if sent.error %} ({{ sent.error }}){% endif %}</p>
-        {% elif can_approve %}
-          <form method="post" action="{{ url_for('main.approve_action', pid=d.paypal_dispute_id) }}" data-once>
-            <input type="hidden" name="run_id" value="{{ run.id }}">
-            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-            <button id="approve-button" data-busy="Sending to PayPal..."
-                    class="rounded-md bg-blue-700 px-4 py-2 text-sm font-medium text-white hover:bg-blue-800">
-              Approve: {{ labels[action] }}</button>
-          </form>
-          <p class="mt-2 text-xs text-slate-500">Nothing is sent to PayPal until you approve.</p>
-        {% endif %}
-      </div>
+    {% elif run.policy %}
+      <p class="text-sm font-medium">Blocked by safety rules</p>
+      <ul class="mt-3 space-y-2 text-sm text-[#F2C2B5]">
+        {% for reason in run.policy.reasons %}
+          <li class="flex items-start gap-2.5">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" class="mt-0.5 shrink-0" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>
+            {{ reason }}
+          </li>
+        {% endfor %}
+      </ul>
     {% endif %}
-  </section>
+  </div>
+</section>
+{% endif %}
 
-  <aside class="space-y-6">
-    <section class="rounded-lg border border-slate-200 bg-white p-5 text-sm">
-      <h2 class="font-semibold">Order records</h2>
-      {% if d.order %}
-        <div id="order-{{ d.order.id }}" class="mt-3 -mx-2 rounded p-2 scroll-mt-4 target:bg-yellow-50">
-          <div class="flex items-center justify-between">
-            <span class="font-medium">Order</span>
-            <span class="font-mono text-xs text-slate-400">order:{{ d.order.id }}</span>
-          </div>
-          <p>{{ d.order.item_description }} · {{ d.order.amount }} {{ d.order.currency }}</p>
-          <p class="text-slate-500">{{ d.order.customer_name }}</p>
-        </div>
-        {% for s in d.order.shipments %}
-        <div id="shipment-{{ s.id }}" class="mt-2 -mx-2 rounded p-2 scroll-mt-4 target:bg-yellow-50">
-          <div class="flex items-center justify-between">
-            <span class="font-medium">Shipment</span>
-            <span class="font-mono text-xs text-slate-400">shipment:{{ s.id }}</span>
-          </div>
-          <p>{{ s.carrier }} · <span class="font-mono">{{ s.tracking_number }}</span></p>
-          <p class="text-slate-500">{{ "Delivered " ~ (s.delivered_at | when) if s.delivered_at else "Not delivered yet" }}</p>
-        </div>
+<div class="mt-8 grid gap-6 lg:grid-cols-3">
+  <div class="space-y-6 lg:col-span-2">
+    {% if p %}
+    <section class="rounded-xl border border-line bg-paper p-6">
+      <h2 class="text-lg font-semibold text-ink">Evidence</h2>
+      <ul class="mt-4 divide-y divide-line">
+        {% for e in p.evidence %}
+          <li class="flex flex-col gap-2 py-3 sm:flex-row sm:items-start sm:gap-4">
+            <a href="#{{ e.record_id.replace(':', '-') }}" title="{{ e.record_id }}"
+               class="shrink-0 rounded-md bg-mist px-2.5 py-1 text-xs font-medium text-ink ring-1 ring-line hover:ring-brass sm:w-28 sm:text-center">
+              {{ e.record_id.split(":")[0] | capitalize }} record</a>
+            <span class="leading-relaxed">{{ e.claim }}</span>
+          </li>
         {% else %}
-        <p class="mt-3 text-slate-500">No shipment on file.</p>
+          <li class="py-3 text-slate">No records cited.</li>
         {% endfor %}
-        {% for m in d.order.messages %}
-        <div id="message-{{ m.id }}" class="mt-2 -mx-2 rounded p-2 scroll-mt-4 target:bg-yellow-50">
-          <div class="flex items-center justify-between">
-            <span class="font-medium">Message from {{ m.sender }}</span>
-            <span class="font-mono text-xs text-slate-400">message:{{ m.id }}</span>
-          </div>
-          <p class="text-xs text-slate-500">{{ m.sent_at | when }}</p>
-          <blockquote class="mt-1 border-l-2 border-slate-300 pl-3 text-slate-700">{{ m.body }}</blockquote>
-        </div>
-        {% endfor %}
-      {% else %}
-        <p class="mt-3 text-slate-500">No matching order found.</p>
-      {% endif %}
+      </ul>
     </section>
 
-    <section class="rounded-lg border border-slate-200 bg-white p-5 text-sm">
-      <h2 class="font-semibold">Timeline</h2>
-      <ol class="mt-3 space-y-3">
-        {% for t in timeline %}
-        <li><span class="text-xs text-slate-500">{{ t.created_at | when }}</span><br>
-          <span class="font-medium">{{ t.actor }}</span> · {{ t.event.replace("_", " ") }}</li>
+    <section class="rounded-xl border border-line bg-paper p-6">
+      <h2 class="text-lg font-semibold text-ink">Note to PayPal</h2>
+      <p class="mt-1 text-sm text-slate">Sent with the evidence when you approve. Read it first.</p>
+      <p class="mt-4 rounded-lg bg-mist p-4 leading-relaxed">{{ p.draft_note }}</p>
+    </section>
+    {% endif %}
+
+    <section class="rounded-xl border border-line bg-paper p-6">
+      <h2 class="text-lg font-semibold text-ink">What the records show</h2>
+      <ol class="mt-4 space-y-1">
+        {% for r in records %}
+          <li {% if r.anchor and r.record_id %}id="{{ r.record_id.replace(':', '-') }}"{% endif %}
+              class="record -mx-3 flex gap-4 rounded-lg px-3 py-3">
+            <span class="mt-1.5 h-2.5 w-2.5 shrink-0 rounded-full {{ 'bg-rust' if r.missing else 'bg-ink' if r.cited else 'bg-line' }}"></span>
+            <div class="min-w-0 flex-1">
+              <div class="flex flex-wrap items-center gap-x-3 gap-y-1">
+                <span class="font-medium {{ 'text-rust' if r.missing else 'text-ink' }}">{{ r.title }}</span>
+                <span class="rounded-full px-2 py-0.5 text-xs {{ 'bg-[#E6EDF3] text-[#2F4A63]' if r.origin == 'paypal' else 'bg-mist text-slate' }}">
+                  {{ "From PayPal" if r.origin == "paypal" else "From your store" }}</span>
+                {% if r.cited %}<span class="rounded-full bg-brasssoft px-2 py-0.5 text-xs font-medium text-brassdeep">Cited</span>{% endif %}
+              </div>
+              {% if r.when %}<p class="mt-0.5 text-xs text-slate">{{ r.when | when }}</p>{% endif %}
+              {% if r.detail %}<p class="mt-1 text-sm text-slate">{{ r.detail }}</p>{% endif %}
+              {% if r.quote %}<blockquote class="mt-2 border-l-2 border-line pl-3 text-sm text-text">{{ r.quote }}</blockquote>{% endif %}
+            </div>
+          </li>
+        {% endfor %}
+      </ol>
+    </section>
+  </div>
+
+  <aside class="space-y-6">
+    <section class="rounded-xl border border-line bg-paper p-6 text-sm">
+      <h2 class="text-lg font-semibold text-ink">From PayPal</h2>
+      <dl class="mt-4 space-y-3">
+        <div><dt class="text-slate">Status</dt><dd class="font-medium">{{ d.status | label }}</dd></div>
+        <div><dt class="text-slate">Stage</dt><dd class="font-medium">{{ d.stage | label }}</dd></div>
+        <div><dt class="text-slate">Opened</dt><dd>{{ opened | when }}</dd></div>
+        <div><dt class="text-slate">Respond by</dt>
+          <dd class="{{ 'font-medium text-rust' if urgent else '' }}">{{ d.seller_response_due | when }}</dd></div>
+        <div><dt class="text-slate">You can now</dt>
+          <dd>{{ actions_now | map("label") | join(", ") | capitalize or "Nothing" }}</dd></div>
+        <div><dt class="text-slate">Dispute ID</dt><dd class="tabular-nums">{{ d.paypal_dispute_id }}</dd></div>
+      </dl>
+    </section>
+
+    <section class="rounded-xl border border-line bg-paper p-6 text-sm">
+      <h2 class="text-lg font-semibold text-ink">Activity</h2>
+      <ol class="mt-4 space-y-3">
+        {% for t in activity %}
+          <li>
+            <p class="font-medium text-ink">{{ t.event.replace("_", " ") | capitalize }}</p>
+            <p class="text-xs text-slate">{{ t.actor | capitalize }}, {{ t.created_at | when }}</p>
+          </li>
         {% else %}
-        <li class="text-slate-500">Nothing recorded yet.</li>
+          <li class="text-slate">Nothing recorded yet.</li>
         {% endfor %}
       </ol>
     </section>
   </aside>
 </div>
+
+<script>
+  const timeLeftEl = document.getElementById("time-left");
+  if (timeLeftEl) {
+    const minutes = Math.floor((Date.parse(timeLeftEl.dataset.due) - Date.now()) / 60000);
+    const d = Math.floor(minutes / 1440), h = Math.floor((minutes % 1440) / 60), m = minutes % 60;
+    timeLeftEl.textContent = minutes <= 0 ? "Overdue" : d ? `${d}d ${h}h` : h ? `${h}h ${m}m` : `${m}m`;
+  }
+</script>
 {% endblock %}

@@ -174,3 +174,35 @@ def test_sync_button_pulls_disputes_from_paypal(app, client):
 
     assert r.status_code == 302
     assert Dispute.query.filter_by(paypal_dispute_id="PP-NEW").count() == 1
+
+
+def test_refund_requires_explicit_confirmation(app, client):
+    d, run = make_case(allowed=("accept_claim",))
+    run.proposal = {
+        "recommendation": "full_refund", "confidence": 0.8, "reasoning": "No proof of shipment.",
+        "evidence": [], "offer_amount": None, "draft_note": "The seller is refunding the order.",
+    }
+    run.policy = {"allowed": True, "action": "accept_claim", "reasons": []}
+    db.session.commit()
+
+    class RefundingPayPal:
+        sent = []
+
+        def get_dispute(self, dispute_id):
+            return {"dispute_id": dispute_id, "status": "WAITING_FOR_SELLER_RESPONSE",
+                    "dispute_life_cycle_stage": "INQUIRY",
+                    "dispute_amount": {"currency_code": "USD", "value": "25.00"},
+                    "disputed_transactions": [{"seller_transaction_id": "TXN1"}],
+                    "links": [{"rel": "accept_claim"}]}
+
+        def accept_claim(self, dispute_id, note, request_id=None):
+            self.sent.append(request_id)
+            return {}
+
+    app.extensions["paypal"] = RefundingPayPal()
+
+    client.post("/disputes/PP-D-1/approve", data={"run_id": run.id})
+    assert Action.query.count() == 0
+
+    client.post("/disputes/PP-D-1/approve", data={"run_id": run.id, "confirm": "yes"})
+    assert Action.query.count() == 1

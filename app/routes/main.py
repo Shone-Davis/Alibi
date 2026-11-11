@@ -1,4 +1,7 @@
+import os
+from datetime import datetime, timezone
 from decimal import Decimal, InvalidOperation
+from zoneinfo import ZoneInfo
 
 import requests
 from flask import Blueprint, abort, current_app, flash, redirect, render_template, request, url_for
@@ -12,7 +15,7 @@ from app.services.actions import ActionBlocked, approve
 from app.services.agent import run_agent
 from app.services.dashboard import dashboard_rows
 from app.services.audit import record
-from app.services.policy import SELLER_ACTIONS, is_urgent
+from app.services.policy import MONEY_ACTIONS, SELLER_ACTIONS, is_urgent
 from app.services.settings import get_settings
 
 bp = Blueprint("main", __name__)
@@ -24,6 +27,9 @@ bp.add_app_template_filter(label, "label")
 def require_login():
     pass
 
+SANDBOX_TOOLS = {"adjudicate", "require_evidence"}  # PayPal test tools, never shown to sellers
+DISPLAY_TZ = ZoneInfo(os.environ.get("DISPLAY_TIMEZONE", "America/New_York"))
+
 ACTION_LABELS = {
     "provide_evidence": "Submit evidence to PayPal",
     "provide_supporting_info": "Send supporting info to PayPal",
@@ -34,7 +40,9 @@ ACTION_LABELS = {
 
 @bp.app_template_filter("when")
 def when(value):
-    return value.strftime("%b %-d, %Y %-I:%M %p %Z") if value else "Not set"
+    if not value:
+        return "Not set"
+    return value.astimezone(DISPLAY_TZ).strftime("%b %-d, %Y %-I:%M %p %Z")
 
 
 def _dispute_or_404(pid):
@@ -50,6 +58,48 @@ def index():
     return render_template("index.html", rows=rows, summary=summary)
 
 
+def _parse_iso(value):
+    if not value:
+        return None
+    try:
+        return datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+
+
+def _record_timeline(dispute, cited):
+    """Every record behind the dispute, oldest first, marked when the AI cited it."""
+    events = []
+    order = dispute.order
+    if order:
+        events.append({"when": order.ordered_at, "title": "Order placed",
+                       "detail": f"{order.item_description}, {order.amount} {order.currency}",
+                       "record_id": f"order:{order.id}"})
+        for s in order.shipments:
+            events.append({"when": s.shipped_at, "title": f"Shipped with {s.carrier}",
+                           "detail": f"Tracking {s.tracking_number}", "record_id": f"shipment:{s.id}"})
+            if s.delivered_at:
+                events.append({"when": s.delivered_at, "title": "Delivered",
+                               "detail": f"{s.carrier} delivery scan", "record_id": f"shipment:{s.id}",
+                               "anchor": False})
+        if not order.shipments:
+            events.append({"when": None, "title": "No shipment on file",
+                           "detail": "No carrier or tracking number was recorded.", "record_id": None,
+                           "missing": True})
+        for m in order.messages:
+            events.append({"when": m.sent_at, "title": f"Message from {m.sender}", "quote": m.body,
+                           "record_id": f"message:{m.id}"})
+    events.append({"when": _parse_iso((dispute.raw or {}).get("create_time")),
+                   "title": "Dispute opened on PayPal", "detail": label(dispute.reason),
+                   "record_id": None, "origin": "paypal"})
+    for event in events:
+        event.setdefault("origin", "store")
+        event.setdefault("anchor", True)
+        event["cited"] = event["record_id"] in cited
+    latest = datetime.max.replace(tzinfo=timezone.utc)
+    return sorted(events, key=lambda e: e["when"] or latest)
+
+
 @bp.route("/disputes/<pid>")
 def dispute_detail(pid):
     dispute = _dispute_or_404(pid)
@@ -63,7 +113,8 @@ def dispute_detail(pid):
         and action in SELLER_ACTIONS
         and action in (dispute.allowed_actions or [])
     )
-    timeline = AuditLog.query.filter_by(dispute_id=dispute.id).order_by(AuditLog.created_at).all()
+    cited = {e["record_id"] for e in run.proposal.get("evidence", [])} if run and run.proposal else set()
+    activity = AuditLog.query.filter_by(dispute_id=dispute.id).order_by(AuditLog.created_at).all()
     return render_template(
         "dispute.html",
         d=dispute,
@@ -71,7 +122,11 @@ def dispute_detail(pid):
         sent=sent,
         action=action,
         can_approve=can_approve,
-        timeline=timeline,
+        money_action=action in MONEY_ACTIONS,
+        records=_record_timeline(dispute, cited),
+        opened=_parse_iso((dispute.raw or {}).get("create_time")),
+        actions_now=[a for a in (dispute.allowed_actions or []) if a not in SANDBOX_TOOLS],
+        activity=activity,
         urgent=is_urgent(dispute, hours=get_settings().urgent_hours),
         labels=ACTION_LABELS,
     )
@@ -93,6 +148,9 @@ def approve_action(pid):
     dispute = _dispute_or_404(pid)
     run_id = request.form.get("run_id", type=int)
     run = AgentRun.query.filter_by(id=run_id, dispute_id=dispute.id).first_or_404()
+    if (run.policy or {}).get("action") in MONEY_ACTIONS and request.form.get("confirm") != "yes":
+        flash("Tick the confirmation box before approving a refund.", "error")
+        return redirect(url_for("main.dispute_detail", pid=pid))
     try:
         action = approve(run, approved_by=current_user.email, client=current_app.extensions["paypal"])
     except ActionBlocked as e:

@@ -45,6 +45,7 @@ SQLAlchemy==2.1.6
 truststore==0.10.5
 typing-inspection==0.4.4
 typing_extensions==4.16.0
+tzdata==2026.6
 urllib3==2.8.0
 Werkzeug==3.1.9
 wrapt==2.5.2
