@@ -1,25 +1,41 @@
 {% extends "base.html" %}
 {% block title %}Settings · Alibi{% endblock %}
 {% block content %}
-<div class="max-w-lg">
-  <h1 class="text-2xl font-semibold">Settings</h1>
-  <form method="post" class="mt-6 space-y-6 rounded-lg border border-slate-200 bg-white p-6">
-    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-    <label class="block text-sm">
-      <span class="font-medium">Refund threshold (USD)</span>
-      <input name="refund_threshold" type="number" step="0.01" min="0" max="10000" required
-             value="{{ s.refund_threshold }}" class="mt-1 w-40 rounded-md border border-slate-300 px-3 py-2">
-      <span class="mt-1 block text-slate-500">Below this amount, the AI may suggest refunding instead of fighting.
-        You still approve every refund.</span>
+<h1 class="font-serif text-[2.4rem] leading-tight text-ink">Settings</h1>
+<p class="mt-1 text-slate">How Alibi weighs small disputes and when it flags a deadline.</p>
+
+<form method="post" class="mt-8 max-w-2xl rounded-xl border border-line bg-paper">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+  <div class="grid gap-4 border-b border-line p-6 sm:grid-cols-[1fr_11rem] sm:items-start">
+    <label for="refund_threshold">
+      <span class="font-medium text-ink">Refund threshold</span>
+      <span class="mt-1 block text-sm text-slate">Below this amount, Alibi may suggest refunding instead of
+        fighting, because a refund can cost less than your time. You still approve every refund.</span>
     </label>
-    <label class="block text-sm">
-      <span class="font-medium">Urgency window (hours)</span>
-      <input name="urgent_hours" type="number" min="1" max="720" required
-             value="{{ s.urgent_hours }}" class="mt-1 w-40 rounded-md border border-slate-300 px-3 py-2">
-      <span class="mt-1 block text-slate-500">Disputes waiting on you with a deadline inside this window are
-        marked urgent. 48 hours is 2 days; 504 hours is 21 days.</span>
+    <div class="flex items-center rounded-lg border border-line focus-within:border-brass">
+      <span class="pl-3 text-slate">$</span>
+      <input id="refund_threshold" name="refund_threshold" type="number" step="0.01" min="0" max="10000" required
+             value="{{ s.refund_threshold }}" class="w-full rounded-lg px-2 py-2 tabular-nums focus:outline-none">
+    </div>
+  </div>
+
+  <div class="grid gap-4 p-6 sm:grid-cols-[1fr_11rem] sm:items-start">
+    <label for="urgent_hours">
+      <span class="font-medium text-ink">Urgency window</span>
+      <span class="mt-1 block text-sm text-slate">Disputes waiting on you with a deadline inside this window are
+        marked urgent. 48 hours is 2 days; 300 hours is about 12 days.</span>
     </label>
-    <button class="rounded-md bg-blue-700 px-4 py-2 text-sm font-medium text-white hover:bg-blue-800">Save</button>
-  </form>
-</div>
+    <div class="flex items-center rounded-lg border border-line focus-within:border-brass">
+      <input id="urgent_hours" name="urgent_hours" type="number" min="1" max="720" required
+             value="{{ s.urgent_hours }}" class="w-full rounded-lg px-3 py-2 tabular-nums focus:outline-none">
+      <span class="pr-3 text-slate">hours</span>
+    </div>
+  </div>
+
+  <div class="flex items-center justify-between gap-4 rounded-b-xl bg-mist/60 px-6 py-4">
+    <p class="text-sm text-slate">Changes are saved to the activity log.</p>
+    <button class="rounded-lg bg-ink px-5 py-2.5 text-sm font-medium text-white hover:bg-inkdeep">Save settings</button>
+  </div>
+</form>
 {% endblock %}
