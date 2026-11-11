@@ -1,47 +1,128 @@
+{% macro mark(size=26) -%}
+<svg width="{{ size }}" height="{{ size }}" viewBox="0 0 32 32" aria-hidden="true">
+  <rect width="32" height="32" rx="8" fill="#123A2C"/>
+  <path d="M9 16.5l4.5 4.5L23 11.5" stroke="#D9B865" stroke-width="3.2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>
+{%- endmacro %}
+{% set authed = current_user.is_authenticated %}
+{% set on_disputes = request.endpoint in ("main.index", "main.dispute_detail") %}
+{% set on_settings = request.endpoint == "main.settings" %}
 <!doctype html>
 <html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% block title %}Alibi{% endblock %}</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='8' fill='%23123A2C'/><path d='M9 16.5l4.5 4.5L23 11.5' stroke='%23D9B865' stroke-width='3.2' fill='none' stroke-linecap='round' stroke-linejoin='round'/></svg>">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@400;500;600&family=Newsreader:opsz,wght@6..72,400;6..72,500&display=swap" rel="stylesheet">
   <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            mist: "#F3F6F5", paper: "#FFFFFF", ink: "#123A2C", inkdeep: "#0C2A1F",
+            brass: "#A8822E", brasssoft: "#F4EBD6", brassdeep: "#7A5D1C",
+            rust: "#A3412A", rustsoft: "#F8E9E4", slate: "#4A5551", line: "#DCE3E0", text: "#1B2420",
+          },
+          fontFamily: {
+            sans: ['"Inter Tight"', "system-ui", "sans-serif"],
+            serif: ["Newsreader", "Georgia", "serif"],
+          },
+        },
+      },
+    };
+  </script>
+  <style>
+    :focus-visible { outline: 2px solid #A8822E; outline-offset: 2px; }
+    @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+  </style>
   {% block head %}{% endblock %}
 </head>
-<body class="bg-slate-50 text-slate-900 antialiased">
-  <header class="bg-white border-b border-slate-200">
-    <div class="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between">
-      <a href="{{ url_for('main.index') }}" class="font-semibold tracking-tight">Alibi</a>
-      <div class="flex items-center gap-4 text-xs text-slate-500">
-        <span>PayPal sandbox</span>
-        {% if current_user.is_authenticated %}
-          <a href="{{ url_for('main.settings') }}" class="text-blue-700 hover:underline">Settings</a>
-          <span>{{ current_user.email }}</span>
-          <form method="post" action="{{ url_for('auth.logout') }}">
-            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-            <button class="text-blue-700 hover:underline">Sign out</button>
-          </form>
-        {% endif %}
-      </div>
+<body class="min-h-screen bg-mist font-sans text-text antialiased">
+{% if authed %}
+<div class="lg:flex">
+  <aside class="hidden lg:sticky lg:top-0 lg:flex lg:h-screen lg:w-60 lg:shrink-0 lg:flex-col lg:border-r lg:border-line lg:bg-paper">
+    <a href="{{ url_for('main.index') }}" class="flex items-center gap-2.5 px-6 py-6">
+      {{ mark(28) }}<span class="font-serif text-[1.75rem] leading-none text-ink">Alibi</span>
+    </a>
+    <nav class="flex flex-col gap-1 px-3 text-sm">
+      <a href="{{ url_for('main.index') }}"
+         class="flex items-center gap-3 rounded-lg px-3 py-2 {{ 'bg-mist font-medium text-ink' if on_disputes else 'text-slate hover:bg-mist hover:text-ink' }}">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true">
+          <path d="M4 5h16v10H4z"/><path d="M4 15l3 4h10l3-4"/><path d="M9 10h6"/>
+        </svg>
+        Disputes
+      </a>
+      <a href="{{ url_for('main.settings') }}"
+         class="flex items-center gap-3 rounded-lg px-3 py-2 {{ 'bg-mist font-medium text-ink' if on_settings else 'text-slate hover:bg-mist hover:text-ink' }}">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true">
+          <path d="M4 7h9M17 7h3M4 17h3M11 17h9"/><circle cx="15" cy="7" r="2"/><circle cx="9" cy="17" r="2"/>
+        </svg>
+        Settings
+      </a>
+    </nav>
+    <div class="mt-auto border-t border-line px-6 py-5 text-sm">
+      <span class="rounded-full bg-brasssoft px-2.5 py-0.5 text-xs font-medium text-brassdeep">PayPal sandbox</span>
+      <p class="mt-3 truncate text-slate" title="{{ current_user.email }}">{{ current_user.email }}</p>
+      <form method="post" action="{{ url_for('auth.logout') }}" class="mt-1">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button class="text-slate hover:text-ink">Sign out</button>
+      </form>
     </div>
-  </header>
-  <main class="max-w-6xl mx-auto px-4 py-6">
-    {% with messages = get_flashed_messages(with_categories=true) %}
-      {% for category, message in messages %}
-        <div class="mb-4 rounded-md px-4 py-3 text-sm
-          {{ 'bg-emerald-50 text-emerald-800 border border-emerald-200' if category == 'success'
-             else 'bg-red-50 text-red-800 border border-red-200' }}">{{ message }}</div>
-      {% endfor %}
-    {% endwith %}
-    {% block content %}{% endblock %}
-  </main>
-  <script>
-    document.querySelectorAll("form[data-once]").forEach((form) => {
-      form.addEventListener("submit", () => {
-        const button = form.querySelector("button");
-        button.disabled = true;
-        button.textContent = button.dataset.busy || "Working...";
-      });
+  </aside>
+
+  <div class="min-w-0 flex-1">
+    <header class="flex items-center justify-between gap-4 border-b border-line bg-paper px-5 py-3 lg:hidden">
+      <a href="{{ url_for('main.index') }}" class="flex items-center gap-2">
+        {{ mark(24) }}<span class="font-serif text-2xl leading-none text-ink">Alibi</span>
+      </a>
+      <nav class="flex items-center gap-4 text-sm">
+        <a href="{{ url_for('main.index') }}" class="{{ 'font-medium text-ink' if on_disputes else 'text-slate' }}">Disputes</a>
+        <a href="{{ url_for('main.settings') }}" class="{{ 'font-medium text-ink' if on_settings else 'text-slate' }}">Settings</a>
+        <form method="post" action="{{ url_for('auth.logout') }}">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <button class="text-slate">Sign out</button>
+        </form>
+      </nav>
+    </header>
+{% else %}
+    <header class="border-b border-line bg-paper">
+      <div class="mx-auto flex max-w-6xl items-center justify-between px-5 py-4">
+        <span class="flex items-center gap-2.5">{{ mark(26) }}<span class="font-serif text-[1.65rem] leading-none text-ink">Alibi</span></span>
+        <span class="rounded-full bg-brasssoft px-2.5 py-0.5 text-xs font-medium text-brassdeep">PayPal sandbox</span>
+      </div>
+    </header>
+{% endif %}
+
+    <main class="mx-auto w-full {{ 'max-w-[1440px] px-5 py-8 sm:px-8 lg:px-10 lg:py-10' if authed else 'max-w-6xl px-5 py-10' }}">
+      {% with messages = get_flashed_messages(with_categories=true) %}
+        {% for category, message in messages %}
+          <div role="status" class="mb-6 rounded-lg border px-4 py-3 text-sm
+            {{ 'border-[#C9DDD3] bg-[#E7F0EC] text-ink' if category == 'success' else 'border-[#EBC9BE] bg-rustsoft text-rust' }}">
+            {{ message }}
+          </div>
+        {% endfor %}
+      {% endwith %}
+      {% block content %}{% endblock %}
+    </main>
+
+{% if authed %}
+  </div>
+</div>
+{% endif %}
+
+<script>
+  document.querySelectorAll("form[data-once]").forEach((form) => {
+    form.addEventListener("submit", () => {
+      const button = form.querySelector("button[type=submit], button:not([type])");
+      if (!button) return;
+      button.disabled = true;
+      button.textContent = button.dataset.busy || "Working...";
     });
-  </script>
+  });
+</script>
 </body>
 </html>

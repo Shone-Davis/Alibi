@@ -158,3 +158,19 @@ def test_urgency_window_comes_from_settings(app, client):
     assert dashboard_rows(now=now)[0][0]["urgent"] is False
     client.post("/settings", data={"refund_threshold": "15", "urgent_hours": "504"})
     assert dashboard_rows(now=now)[0][0]["urgent"] is True
+
+
+def test_sync_button_pulls_disputes_from_paypal(app, client):
+    class ListingPayPal:
+        def list_disputes(self, page_size=50):
+            return [{"dispute_id": "PP-NEW"}]
+
+        def get_dispute(self, dispute_id):
+            return {"dispute_id": dispute_id, "status": "WAITING_FOR_SELLER_RESPONSE", "links": []}
+
+    app.extensions["paypal"] = ListingPayPal()
+
+    r = client.post("/sync")
+
+    assert r.status_code == 302
+    assert Dispute.query.filter_by(paypal_dispute_id="PP-NEW").count() == 1

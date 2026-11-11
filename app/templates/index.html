@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% block title %}Disputes · Alibi{% endblock %}
 
 {% block head %}
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ag-grid-community@32.3.3/styles/ag-grid.css">
@@ -6,70 +7,135 @@
 <script src="https://cdn.jsdelivr.net/npm/ag-grid-community@32.3.3/dist/ag-grid-community.min.js"></script>
 <style>
   .ag-theme-quartz {
-    --ag-font-family: inherit;
-    --ag-font-size: 13px;
-    --ag-header-background-color: #f1f5f9;
-    --ag-row-hover-color: #f8fafc;
+    --ag-font-family: "Inter Tight", system-ui, sans-serif;
+    --ag-font-size: 14px;
+    --ag-foreground-color: #1B2420;
+    --ag-header-foreground-color: #4A5551;
+    --ag-header-background-color: #F7F9F8;
+    --ag-header-font-weight: 500;
+    --ag-border-color: #DCE3E0;
+    --ag-row-border-color: #E8EDEB;
+    --ag-row-hover-color: #F3F6F5;
+    --ag-wrapper-border-radius: 12px;
+    --ag-cell-horizontal-padding: 18px;
   }
-  .ag-theme-quartz .row-urgent { background-color: #fef2f2; }
   .ag-theme-quartz .ag-row { cursor: pointer; }
+  .ag-theme-quartz .ag-cell { display: flex; align-items: center; line-height: 1.35; }
+  .ag-theme-quartz .ag-right-aligned-cell { justify-content: flex-end; }
+  .ag-theme-quartz .row-urgent { background-color: #FBF1EE; }
+  .ag-theme-quartz .row-urgent .ag-cell:first-child { box-shadow: inset 3px 0 0 #A3412A; }
 </style>
 {% endblock %}
 
 {% block content %}
-{% macro tile(title, value, tone="text-slate-900") %}
-<div class="rounded-lg border border-slate-200 bg-white p-4">
-  <div class="text-xs font-medium uppercase tracking-wide text-slate-500">{{ title }}</div>
-  <div class="mt-1 text-2xl font-semibold {{ tone }}">{{ value }}</div>
-</div>
-{% endmacro %}
-
-<div class="flex flex-wrap items-end justify-between gap-3">
+<div class="flex flex-wrap items-end justify-between gap-4">
   <div>
-    <h1 class="text-2xl font-semibold">Disputes</h1>
-    <p class="mt-1 text-sm text-slate-500">Sorted by deadline. New disputes arrive automatically from PayPal.</p>
+    <h1 class="font-serif text-[2.4rem] leading-tight text-ink">Disputes</h1>
+    <p class="mt-1 text-slate">Nearest deadline first. New disputes arrive from PayPal on their own.</p>
   </div>
-  <input id="quick-filter" type="search" placeholder="Search disputes"
-         class="w-full sm:w-64 rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm">
+  <form method="post" action="{{ url_for('main.sync') }}" data-once>
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <button data-busy="Syncing..."
+            class="inline-flex items-center gap-2 rounded-lg border border-line bg-paper px-4 py-2 text-sm font-medium text-ink hover:border-ink">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+        <path d="M20 11a8 8 0 0 0-14.9-3.9M4 4v4h4"/><path d="M4 13a8 8 0 0 0 14.9 3.9M20 20v-4h-4"/>
+      </svg>
+      Sync with PayPal
+    </button>
+  </form>
 </div>
 
-<div class="mt-5 grid grid-cols-2 gap-3 md:grid-cols-4">
-  {{ tile("Open", summary.open) }}
-  {{ tile("Waiting on you", summary.waiting_on_you, "text-amber-700" if summary.waiting_on_you else "text-slate-900") }}
-  {{ tile("Urgent", summary.urgent, "text-red-700" if summary.urgent else "text-slate-900") }}
-  {{ tile("At stake", summary.at_stake ~ " USD") }}
+<div class="mt-8 grid gap-4 md:grid-cols-3">
+  <div class="rounded-xl bg-ink p-6 text-white">
+    <p class="text-sm text-white/75">At stake</p>
+    <p class="mt-2 text-[2.6rem] font-semibold tracking-tight leading-none tabular-nums">${{ summary.at_stake }}</p>
+    <p class="mt-4 text-sm text-white/75">Across {{ summary.open }} open dispute{{ "" if summary.open == 1 else "s" }}</p>
+  </div>
+
+  <div class="rounded-xl border border-line bg-paper p-6">
+    <p class="text-sm text-slate">Waiting on you</p>
+    <p class="mt-2 text-[2.6rem] font-semibold tracking-tight leading-none text-ink tabular-nums">{{ summary.waiting_on_you }}</p>
+    <p class="mt-4 text-sm {{ 'font-medium text-rust' if summary.urgent else 'text-slate' }}">
+      {% if summary.urgent %}{{ summary.urgent }} urgent{% else %}None urgent{% endif %}
+    </p>
+  </div>
+
+  <div class="rounded-xl border border-line bg-paper p-6">
+    <p class="text-sm text-slate">Next deadline</p>
+    {% if summary.next_due %}
+      <p id="next-due" data-due="{{ summary.next_due }}"
+         class="mt-2 text-[2.6rem] font-semibold tracking-tight leading-none tabular-nums {{ 'text-rust' if summary.next_due_urgent else 'text-ink' }}">&nbsp;</p>
+      <a href="{{ url_for('main.dispute_detail', pid=summary.next_due_id) }}"
+         class="mt-4 block truncate text-sm text-slate hover:text-ink hover:underline">
+        {{ summary.next_due_who or summary.next_due_id }}
+      </a>
+    {% else %}
+      <p class="mt-2 text-[2.6rem] font-semibold tracking-tight leading-none text-ink">None</p>
+      <p class="mt-4 text-sm text-slate">Nothing needs a response</p>
+    {% endif %}
+  </div>
 </div>
 
-<div id="grid" class="ag-theme-quartz mt-5"></div>
+<div class="mt-10 flex flex-wrap items-center justify-between gap-3">
+  <h2 class="text-lg font-semibold text-ink">All disputes
+    <span class="ml-1 rounded-md bg-paper px-2 py-0.5 text-sm font-medium text-slate ring-1 ring-line">{{ rows | length }}</span>
+  </h2>
+  <label class="w-full sm:w-80">
+    <span class="sr-only">Search disputes</span>
+    <input id="quick-filter" type="search" placeholder="Search customer, item, ID or status"
+           class="w-full rounded-lg border border-line bg-paper px-3 py-2 text-sm placeholder:text-slate/70 focus:border-brass focus:outline-none">
+  </label>
+</div>
+
+<div id="grid" class="ag-theme-quartz mt-4"></div>
 <script id="rows" type="application/json">{{ rows | tojson }}</script>
 
 <script>
   const rows = JSON.parse(document.getElementById("rows").textContent);
 
   const STATUS_TONES = {
-    WAITING_FOR_SELLER_RESPONSE: "bg-amber-100 text-amber-800",
-    OPEN: "bg-amber-100 text-amber-800",
-    WAITING_FOR_BUYER_RESPONSE: "bg-slate-100 text-slate-700",
-    UNDER_REVIEW: "bg-blue-100 text-blue-800",
-    RESOLVED: "bg-emerald-100 text-emerald-800",
+    WAITING_FOR_SELLER_RESPONSE: "bg-brasssoft text-brassdeep",
+    OPEN: "bg-brasssoft text-brassdeep",
+    WAITING_FOR_BUYER_RESPONSE: "bg-[#EEF1F0] text-slate",
+    UNDER_REVIEW: "bg-[#E6EDF3] text-[#2F4A63]",
+    RESOLVED: "bg-[#E7F0EC] text-ink",
   };
   const RECOMMENDATION_TONES = {
-    "Fight": "bg-blue-100 text-blue-800",
-    "Partial refund": "bg-amber-100 text-amber-800",
-    "Full refund": "bg-amber-100 text-amber-800",
-    "Needs review": "bg-red-100 text-red-800",
-    "Sent to PayPal": "bg-emerald-100 text-emerald-800",
+    "Fight": "bg-[#E7F0EC] text-ink",
+    "Partial refund": "bg-brasssoft text-brassdeep",
+    "Full refund": "bg-brasssoft text-brassdeep",
+    "Needs review": "bg-rustsoft text-rust",
+    "Sent to PayPal": "bg-ink text-white",
   };
 
   function el(tag, className, text) {
     const node = document.createElement(tag);
     node.className = className;
-    node.textContent = text;
+    if (text !== undefined) node.textContent = text;
     return node;
   }
 
   function badge(text, tone) {
-    return text ? el("span", `inline-block rounded px-1.5 py-0.5 text-xs font-medium ${tone}`, text) : "";
+    return el("span", `inline-block rounded-full px-2.5 py-0.5 text-xs font-medium ${tone}`, text);
+  }
+
+  function timeLeft(iso) {
+    const minutes = Math.floor((Date.parse(iso) - Date.now()) / 60000);
+    if (minutes <= 0) return "Overdue";
+    const d = Math.floor(minutes / 1440), h = Math.floor((minutes % 1440) / 60), m = minutes % 60;
+    return d ? `${d}d ${h}h` : h ? `${h}h ${m}m` : `${m}m`;
+  }
+
+  function fullDate(iso) {
+    return new Date(iso).toLocaleString(undefined, {
+      weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit",
+    });
+  }
+
+  const nextDue = document.getElementById("next-due");
+  if (nextDue) {
+    nextDue.textContent = timeLeft(nextDue.dataset.due);
+    nextDue.title = `Respond by ${fullDate(nextDue.dataset.due)}`;
   }
 
   function dueComparator(a, b, nodeA, nodeB, isDescending) {
@@ -79,45 +145,53 @@
     return Date.parse(a) - Date.parse(b);
   }
 
-  function dueRenderer(p) {
-    if (!p.value) return el("span", "text-slate-400", "No deadline");
-    const text = new Date(p.value).toLocaleString(undefined, {
-      month: "short", day: "numeric", hour: "numeric", minute: "2-digit",
-    });
-    const tone = p.data.urgent ? "font-semibold text-red-700" : p.data.waiting_on_you ? "" : "text-slate-400";
-    const wrap = el("span", tone, text);
-    if (p.data.urgent) wrap.append(" ", badge("Urgent", "bg-red-100 text-red-800"));
-    return wrap;
+  function openDispute(id) {
+    window.location.href = `/disputes/${encodeURIComponent(id)}`;
   }
 
   const columnDefs = [
     {
-      field: "id", headerName: "Dispute", minWidth: 190,
+      field: "due", headerName: "Time left", width: 130, minWidth: 120, flex: 0, sort: "asc",
+      comparator: dueComparator,
       cellRenderer: (p) => {
-        const link = el("a", "font-mono text-blue-700 hover:underline", p.value);
-        link.href = `/disputes/${encodeURIComponent(p.value)}`;
-        return link;
+        if (!p.value) return el("span", "text-slate/70", "No deadline");
+        if (!p.data.waiting_on_you) {
+          const done = el("span", "text-slate/70", "Nothing due");
+          done.title = "PayPal isn't waiting on you for this one";
+          return done;
+        }
+        const left = el("span", `font-semibold tabular-nums ${p.data.urgent ? "text-rust" : "text-ink"}`, timeLeft(p.value));
+        left.title = `Respond by ${fullDate(p.value)}`;
+        return left;
+      },
+    },
+    {
+      field: "customer", headerName: "Customer", minWidth: 260, flex: 2,
+      getQuickFilterText: (p) => [p.data.customer, p.data.item, p.data.id].join(" "),
+      cellRenderer: (p) => {
+        const box = el("div", "flex min-w-0 flex-col");
+        const name = el("a", "truncate font-medium text-ink hover:underline", p.data.customer || "Order not matched");
+        name.href = `/disputes/${encodeURIComponent(p.data.id)}`;
+        const detail = el("span", "truncate text-xs text-slate", [p.data.item, p.data.id].filter(Boolean).join(", "));
+        box.append(name, detail);
+        return box;
       },
     },
     { field: "reason", headerName: "Reason", minWidth: 150 },
     {
-      field: "amount", headerName: "Amount", type: "rightAligned", maxWidth: 130,
-      valueFormatter: (p) => (p.value == null ? "" : `${p.value.toFixed(2)} ${p.data.currency}`),
+      field: "amount", headerName: "Amount", type: "rightAligned", width: 120, flex: 0,
+      cellRenderer: (p) => p.value == null ? "" : el("span", "font-semibold tabular-nums", `$${p.value.toFixed(2)}`),
     },
     {
-      field: "status", headerName: "Status", minWidth: 210,
-      cellRenderer: (p) => badge(p.value, STATUS_TONES[p.data.status_code] || "bg-slate-100 text-slate-700"),
+      field: "status", headerName: "Status", minWidth: 200,
+      cellRenderer: (p) => badge(p.value, STATUS_TONES[p.data.status_code] || "bg-[#EEF1F0] text-slate"),
     },
-    { field: "stage", headerName: "Stage", maxWidth: 130 },
+    { field: "stage", headerName: "Stage", width: 130, flex: 0 },
     {
-      field: "recommendation", headerName: "Recommendation", minWidth: 160,
+      field: "recommendation", headerName: "Recommendation", minWidth: 170,
       cellRenderer: (p) => p.value
-        ? badge(p.value, RECOMMENDATION_TONES[p.value] || "bg-slate-100 text-slate-700")
-        : el("span", "text-slate-400", "Not analyzed"),
-    },
-    {
-      field: "due", headerName: "Respond by", minWidth: 190, sort: "asc",
-      comparator: dueComparator, cellRenderer: dueRenderer, filter: false,
+        ? badge(p.value, RECOMMENDATION_TONES[p.value] || "bg-[#EEF1F0] text-slate")
+        : el("span", "text-slate/70", "Not analyzed"),
     },
   ];
 
@@ -127,11 +201,12 @@
     defaultColDef: { sortable: true, resizable: true, flex: 1, minWidth: 110, suppressHeaderMenuButton: true },
     domLayout: "autoHeight",
     suppressCellFocus: true,
+    rowHeight: 64,
+    headerHeight: 44,
     rowClassRules: { "row-urgent": (p) => p.data.urgent },
-    overlayNoRowsTemplate: "No disputes yet. New ones arrive automatically from PayPal.",
+    overlayNoRowsTemplate: "No disputes yet. Click Sync with PayPal, or wait for PayPal to send one.",
     onRowClicked: (e) => {
-      if (e.event.target.closest("a")) return;
-      window.location.href = `/disputes/${encodeURIComponent(e.data.id)}`;
+      if (!e.event.target.closest("a")) openDispute(e.data.id);
     },
   });
 

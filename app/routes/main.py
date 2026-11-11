@@ -1,11 +1,13 @@
 from decimal import Decimal, InvalidOperation
 
+import requests
 from flask import Blueprint, abort, current_app, flash, redirect, render_template, request, url_for
 from flask_login import current_user, login_required
 
 from app import db
 from app.labels import label
 from app.models import Action, AgentRun, AuditLog, Dispute
+from app.paypal.client import PayPalError
 from app.services.actions import ActionBlocked, approve
 from app.services.agent import run_agent
 from app.services.dashboard import dashboard_rows
@@ -127,3 +129,18 @@ def settings():
                 flash("Settings saved.", "success")
                 return redirect(url_for("main.settings"))
     return render_template("settings.html", s=current)
+
+
+@bp.post("/sync")
+def sync():
+    from app.services.sync import sync_all
+
+    try:
+        count = sync_all(current_app.extensions["paypal"])
+    except (PayPalError, requests.RequestException) as e:
+        flash(f"Couldn't reach PayPal: {e}", "error")
+    else:
+        record(None, "seller", "sync_requested", {"by": current_user.email, "disputes": count})
+        db.session.commit()
+        flash(f"Synced {count} dispute{'' if count == 1 else 's'} from PayPal.", "success")
+    return redirect(url_for("main.index"))

@@ -28,6 +28,8 @@ def dashboard_rows(now=None):
     rows = [
         {
             "id": d.paypal_dispute_id,
+            "customer": d.order.customer_name if d.order else None,
+            "item": d.order.item_description if d.order else None,
             "reason": label(d.reason),
             "status": label(d.status),
             "status_code": d.status,
@@ -43,10 +45,16 @@ def dashboard_rows(now=None):
     ]
 
     active = [d for d in disputes if d.status != "RESOLVED"]
+    waiting = [d for d in disputes if d.status in WAITING_ON_SELLER and d.seller_response_due]
+    nearest = min(waiting, key=lambda d: d.seller_response_due, default=None)
     summary = {
         "open": len(active),
         "waiting_on_you": sum(d.status in WAITING_ON_SELLER for d in active),
         "urgent": sum(r["urgent"] for r in rows),
-        "at_stake": f"{sum(float(d.amount or 0) for d in active):.2f}",
+        "at_stake": f"{sum(float(d.amount or 0) for d in active):,.2f}",
+        "next_due": nearest.seller_response_due.isoformat() if nearest else None,
+        "next_due_id": nearest.paypal_dispute_id if nearest else None,
+        "next_due_who": (nearest.order.customer_name if nearest and nearest.order else None),
+        "next_due_urgent": bool(nearest and is_urgent(nearest, now=now, hours=hours)),
     }
     return rows, summary
