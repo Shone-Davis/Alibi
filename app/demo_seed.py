@@ -38,12 +38,13 @@ def seed_orders(dispute_id=None, force_scenario=None):
             continue
 
         scenario = force_scenario or SCENARIOS[i % len(SCENARIOS)]
-        name, email = CUSTOMERS[i % len(CUSTOMERS)]
+        pick = int(hashlib.sha256(d.paypal_dispute_id.encode()).hexdigest(), 16)
+        name, email = CUSTOMERS[pick % len(CUSTOMERS)]
         order = Order(
             paypal_transaction_id=d.seller_transaction_id,
             customer_name=name,
             customer_email=email,
-            item_description=ITEMS[i % len(ITEMS)],
+            item_description=ITEMS[pick % len(ITEMS)],
             amount=d.amount,
             currency=d.currency or "USD",
             ordered_at=now - timedelta(days=10),
