@@ -6,9 +6,7 @@ When a buyer opens a PayPal dispute, a small seller has a deadline, a pile of or
 
 **Live demo:** https://disputeguard-d767.onrender.com (PayPal sandbox, test money only; the demo login is in the Devpost submission)
 
-<!-- VIDEO: replace this comment with the line below once the video is uploaded
-**Demo video:** https://youtu.be/YOUR_VIDEO_ID
--->
+**Demo video:** https://youtu.be/yvsjI_QuX_g
 
 ## Screenshots
 
